@@ -33,11 +33,20 @@ export function draftDirFor(runDate: string, topic: string): DraftPaths {
   };
 }
 
-export function composeNote(c: EvidenceCandidate, market: CompetitionMarket, assumptions: string[] = []): string {
+/**
+ * Compose the note. `linkFetchedAt` (aligned with c.links) carries each shipped
+ * link's actual fetch time — in mock mode the fixture's recorded fetch time, not
+ * the mock run clock — so the note never misrepresents when a source was fetched.
+ */
+export function composeNote(
+  c: EvidenceCandidate,
+  market: CompetitionMarket,
+  assumptions: string[] = [],
+  linkFetchedAt: string[] = [],
+): string {
   const pct = (p: number) => (p < 0.001 ? `<0.1%` : `${(p * 100).toFixed(1)}%`);
   const impliedPct = pct(c.analysis.evidenceImpliedYes);
   const marketPct = `${(c.marketImpliedYes * 100).toFixed(1)}%`;
-  const push = c.stance === "yes" ? "up" : "down";
   const lines: string[] = [];
   lines.push(`Evidence note — ${c.asOf.slice(0, 10)} (all times UTC)`);
   lines.push("");
@@ -54,7 +63,7 @@ export function composeNote(c: EvidenceCandidate, market: CompetitionMarket, ass
   lines.push("2) SOURCES");
   c.links.forEach((l, i) => {
     lines.push(
-      `- [${i + 1}] ${l.url} — ${c.sourceDescriptions[i] ?? l.label} (${l.lang}, ${l.access}); fetched ${c.asOf}`,
+      `- [${i + 1}] ${l.url} — ${c.sourceDescriptions[i] ?? l.label} (${l.lang}, ${l.access}); fetched ${linkFetchedAt[i] ?? c.asOf}`,
     );
   });
   lines.push(
@@ -72,7 +81,7 @@ export function composeNote(c: EvidenceCandidate, market: CompetitionMarket, ass
   lines.push("4) FORECAST COMPARISON");
   lines.push(`- Market implied P(yes) at snapshot: ${marketPct}`);
   lines.push(
-    `- This evidence implies P(yes) ≈ ${impliedPct} (confidence: ${c.analysis.confidence}) — it pushes the ${c.stance.toUpperCase()} side ${push}.`,
+    `- This evidence implies P(yes) ≈ ${impliedPct} (confidence: ${c.analysis.confidence}); relative to the market snapshot, the evidence is consistent with a ${c.stance === "yes" ? "higher" : "lower"} P(yes).`,
   );
   lines.push(
     `- Stance: ${c.stance.toUpperCase()} side only. No evidence is submitted for the opposite side of this market.`,
@@ -86,6 +95,7 @@ export function writeDraft(
   mode: "mock" | "live",
   runDate: string,
   assumptions: string[] = [],
+  linkFetchedAt: string[] = [],
 ): DraftPaths {
   const paths = draftDirFor(runDate, c.topic);
   mkdirSync(paths.dir, { recursive: true });
@@ -104,7 +114,7 @@ export function writeDraft(
     submittedAt: null,
     submissionId: null,
   };
-  writeFileSync(paths.note, composeNote(c, market, assumptions), "utf-8");
+  writeFileSync(paths.note, composeNote(c, market, assumptions, linkFetchedAt), "utf-8");
   writeFileSync(paths.manifest, JSON.stringify(manifest, null, 2), "utf-8");
   return paths;
 }

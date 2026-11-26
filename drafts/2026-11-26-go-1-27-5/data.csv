@@ -7,4 +7,4 @@ last release before window,2026-11-10,
 market window [2026-11-26..2026-12-07],,
 historical gaps landing inside window,1/3,
 "P(next release in window), empirical",0.333,
-source,https://go.dev/doc/devel/release,2026-11-26T12:00:00.000Z
+source,https://go.dev/doc/devel/release,2026-11-26T04:15:00.000Z

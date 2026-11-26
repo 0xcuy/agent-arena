@@ -1,0 +1,39 @@
+{
+  "session_id": "7f2fbeb8-8449-a093-e110-b2ddf7b41913",
+  "parent_session_id": null,
+  "start_time": "2026-11-26T03:47:32.666000+00:00",
+  "end_time": "2026-11-26T04:09:22.497000+00:00",
+  "git_commit": null,
+  "git_branch": null,
+  "environment": {
+    "working_directory": "/root/agent-arena"
+  },
+  "origin_directory": "/root/agent-arena",
+  "username": "root",
+  "child_sessions": [],
+  "loops": [],
+  "title": null,
+  "title_source": "auto",
+  "bumped_at": "2026-11-26T03:47:33.598192+00:00",
+  "pinned_at": null,
+  "archived_at": null,
+  "unseen_at": "2026-11-26T04:09:22.544282+00:00",
+  "seen_at": null,
+  "experiments": null,
+  "config": {
+    "active_model": "zai-glm-5-3",
+    "model_name": "zai-glm-5-3"
+  },
+  "runtime_path": "session_api",
+  "runtime": "local",
+  "import_provenance": null,
+  "created_worktree": null,
+  "project": null,
+  "artifacts": [],
+  "worktrees": [],
+  "owed_replies": [],
+  "pending_context_notes": [],
+  "repository_root": "/root/agent-arena",
+  "checkout_root": "/root/agent-arena",
+  "skill_pins": []
+}

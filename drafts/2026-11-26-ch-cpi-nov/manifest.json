@@ -2,7 +2,7 @@
   "topic": "ch-cpi-nov",
   "marketAddress": "0xecace7b63b2e044dd339e7512cf4360713a8e156",
   "marketQuestion": "Will Swiss FSO report Nov 2026 CPI YoY inflation ≥1.6% in its Dec 2 release?",
-  "generatedAt": "2026-11-26T04:09:03.759Z",
+  "generatedAt": "2026-11-26T04:38:36.446Z",
   "mode": "mock",
   "asOf": "2026-11-26T12:00:00.000Z",
   "stance": "yes",
@@ -12,8 +12,8 @@
   "files": [
     "data.csv"
   ],
-  "factSignature": "6d19cbc4b9649ca737ac0e9f3860cdd8d98a11517e7ec3ef345e7e2024c5b5fa",
-  "idempotencyKey": "5f45f225-4781-4f34-8dc3-20040b573e44",
+  "factSignature": "75714e4dd432df22a9c0be597554b10a3aeea9e067b782b68a70af4ac4a0cd81",
+  "idempotencyKey": "7b8d56d4-1900-4a6d-a128-eb41485a760b",
   "submittedAt": null,
   "submissionId": null
 }

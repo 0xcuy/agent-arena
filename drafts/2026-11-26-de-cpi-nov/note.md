@@ -10,10 +10,10 @@ KEY FIGURES (pasted from the sources, fetched in this run; timestamps in data.cs
 - YoY trajectory in the same release: Aug 2026 +2.9%, Sep 2026 +3.3%, Oct 2026 +2.8% — the required MoM is -0.29%, i.e. prices can DROP on the month and the bar still clears
 
 1) DATED FACT
-Base-effect arithmetic on Destatis's live VPI series (fetched 2026-11-26): the Nov 2026 Vorkorrektur only needs a -0.29% MoM print to reach +2.8% YoY — consumer prices could fall by 0.29% on the month and the market's bar would still clear, because the Oct 2026 index (126.5) already sits above the 2.8%-implied level against the Nov 2025 base (122.7).
+Base-effect arithmetic on Destatis's live VPI series (fetched 2026-11-26): the Nov 2026 Vorläufiges Ergebnis (preliminary result) only needs a -0.29% MoM print to reach +2.8% YoY — consumer prices could fall by 0.29% on the month and the market's bar would still clear, because the Oct 2026 index (126.5) already sits above the 2.8%-implied level against the Nov 2025 base (122.7).
 
 2) SOURCES
-- [1] https://www.destatis.de/DE/Presse/Pressemitteilungen/2026/11/PD26_392_611.html — Destatis Oct 2026 release (static HTML): VPI Oktober 2026 +2.8% YoY, -0.1% MoM; Gesamtindex 126,5 (2020=100). (de, scraped); fetched 2026-11-26T12:00:00.000Z
+- [1] https://www.destatis.de/DE/Presse/Pressemitteilungen/2026/11/PD26_392_611.html — Destatis Oct 2026 release (static HTML): VPI Oktober 2026 +2.8% YoY, -0.1% MoM; Gesamtindex 126,5 (2020=100). (de, scraped); fetched 2026-11-26T04:15:00.000Z
 - data.csv (attached) repeats every figure and series in machine-readable form, one row per source with its URL and UTC fetch timestamp.
 
 3) METHOD
@@ -27,5 +27,5 @@ Base-effect arithmetic on Destatis's live VPI series (fetched 2026-11-26): the N
 
 4) FORECAST COMPARISON
 - Market implied P(yes) at snapshot: 56.8%
-- This evidence implies P(yes) ≈ 99.6% (confidence: high) — it pushes the YES side up.
+- This evidence implies P(yes) ≈ 99.6% (confidence: high); relative to the market snapshot, the evidence is consistent with a higher P(yes).
 - Stance: YES side only. No evidence is submitted for the opposite side of this market.

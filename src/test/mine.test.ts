@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runAnalysis, verifySources } from "../miners/mine.js";
-import { createSources, LIVE_FIXTURES } from "../miners/live/sources.js";
+import { createSources, LIVE_FIXTURES, FIXTURE_FETCHED_AT } from "../miners/live/sources.js";
 import { RESEARCH_SEEDS, SEEDS_BY_MARKET, refreshSeed } from "../miners/live/refreshers.js";
 import type { ResearchSpec } from "../types.js";
 import type { AgentConfig } from "../config.js";
@@ -340,4 +340,195 @@ test("submitDraft refuses a draft whose manifest says it was already submitted",
   const cfg = { mode: "live", liveSubmit: true } as unknown as AgentConfig;
   await assert.rejects(() => submitDraft(cfg, dir), /already submitted/);
   rmSync(dir, { recursive: true, force: true });
+});
+
+// ------------------------------------------------------------ run-3 polish
+
+test("polish 1: ch-cpi KEY FIGURES render '+0.2% MoM' (no '+0,0,2%' template garble)", async () => {
+  const seed = RESEARCH_SEEDS.find((s) => s.topic === "ch-cpi-nov")!;
+  const src = createSources(MOCK_CFG);
+  const r = await refreshSeed(seed, src, CTX);
+  const blob = [...r.spec.figures, ...r.spec.sourceDescriptions].join(" | ");
+  assert.ok(blob.includes("+0.2% MoM"), blob);
+  assert.ok(!blob.includes("+0,0"), `garbled MoM leaked into the draft text: ${blob}`);
+  assert.ok(!blob.includes("+0,0,2%"), blob);
+});
+
+test("polish 2: wikipedia velocity — ONE number (154,500 over 329 days = 469.6/day) everywhere", async () => {
+  const seed = RESEARCH_SEEDS.find((s) => s.topic === "wikipedia-articles")!;
+  const src = createSources(MOCK_CFG);
+  const r = await refreshSeed(seed, src, CTX);
+  const p = r.spec.analysis.params as { dailyNetMean: number; velocity: { days: number; net: number } };
+  // 329 whole days elapsed since 2026-01-01 at MOCK_NOW; 154,500 / 329 = 469.6/day
+  assert.equal(p.velocity.days, 329);
+  assert.ok(Math.abs(p.dailyNetMean - 154500 / 329) < 0.05, `dailyNetMean=${p.dailyNetMean}`);
+  assert.ok(Math.abs(p.dailyNetMean - 469.6) < 0.1, `dailyNetMean=${p.dailyNetMean}`);
+  const figs = r.spec.figures.join(" | ");
+  assert.ok(figs.includes("over the 329 days since"), figs);
+  assert.ok(figs.includes("469.6/day"), figs);
+  assert.ok(!figs.includes("~468"), "no stale ~468.x/day rounding may survive");
+});
+
+test("polish 3: fide figure line reads as a plain result (no table-scrape name garble)", async () => {
+  const seed = RESEARCH_SEEDS.find((s) => s.topic === "fide-game8")!;
+  const src = createSources(MOCK_CFG);
+  const r = await refreshSeed(seed, src, CTX);
+  const blob = [...r.spec.figures, ...r.spec.sourceDescriptions].join(" | ");
+  assert.ok(!blob.includes("Black (White)"), `player-color artifact survived: ${blob}`);
+  assert.ok(!blob.includes("Result (Black)"), `player-color artifact survived: ${blob}`);
+  assert.ok(!/Sindarov Result/.test(blob), blob);
+  assert.ok(/game 2 ended ½-½; match score 1-1/.test(blob), `figure must read as a plain result: ${blob}`);
+  assert.ok(blob.includes("White: Gukesh Dommaraju, Black: Javokhir Sindarov"), blob);
+});
+
+test("polish 4: release_gap_cdf uses the STANDARD median (mean of the two middle gaps, not the upper one)", () => {
+  const releases = [
+    { tag: "v1", date: "2026-01-01" },
+    { tag: "v2", date: "2026-01-15" }, // gap 14
+    { tag: "v3", date: "2026-01-17" }, // gap 2
+    { tag: "v4", date: "2026-01-27" }, // gap 10
+    { tag: "v5", date: "2026-02-14" }, // gap 18
+    { tag: "v6", date: "2026-03-06" }, // gap 20
+    { tag: "v7", date: "2026-03-29" }, // gap 23
+    { tag: "v8", date: "2026-04-08" }, // gap 10
+    { tag: "v9", date: "2026-05-01" }, // gap 23
+    { tag: "v10", date: "2026-08-08" }, // gap 99
+    { tag: "v11", date: "2026-08-23" }, // gap 15
+    { tag: "v12", date: "2026-08-24" }, // gap 1
+    { tag: "v13", date: "2026-09-28" }, // gap 35
+    { tag: "v14", date: "2026-10-10" }, // gap 12
+    { tag: "v15", date: "2026-11-07" }, // gap 28
+  ];
+  // gaps (14, even): sorted = 1,2,10,10,12,14,15,18,20,23,23,28,35,99 -> standard median (15+18)/2 = 16.5
+  const spec: ResearchSpec = {
+    marketAddress: "0x" + "55".repeat(20),
+    topic: "test-gap-median",
+    miningPath: 2,
+    langs: ["en"],
+    headline: "h",
+    figures: ["f1", "f2"],
+    sourceDescriptions: ["s"],
+    links: [],
+    analysis: {
+      kind: "release_gap_cdf",
+      params: { releases, windowStart: "2026-11-28", windowEnd: "2026-12-11" },
+    },
+  };
+  const dir = mkdtempSync(join(tmpdir(), "aa-"));
+  const res = runAnalysis(spec, join(dir, "data.csv"), "2026-11-26T12:00:00.000Z");
+  const medianLine = res.methodLines.find((l) => l.includes("median"))!;
+  assert.ok(medianLine.includes("16.5 days"), `standard median of the 14 gaps is 16.5: ${medianLine}`);
+  assert.ok(!medianLine.includes("18 days"), `upper-median artifact survived: ${medianLine}`);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("polish 5: mock SourceDocs carry the fixture's recorded fetchedAt, never the mock clock", async () => {
+  const sources = createSources(MOCK_CFG);
+  const url = Object.keys(LIVE_FIXTURES)[0]!;
+  const doc = await sources.fetch(url);
+  assert.equal(doc.fetchedAt, FIXTURE_FETCHED_AT[url]);
+  assert.notEqual(doc.fetchedAt, "2026-11-26T12:00:00.000Z");
+  assert.ok(/^\d{4}-11-26T0\d:\d\d:\d\d\.\d{3}Z$/.test(doc.fetchedAt));
+  // every registered fixture has a recorded fetch time (no fixture may fall back to the clock)
+  assert.deepEqual(
+    [...new Set([...Object.keys(LIVE_FIXTURES), ...Object.keys(FIXTURE_FETCHED_AT)])].sort(),
+    Object.keys(LIVE_FIXTURES).sort(),
+  );
+});
+
+test("polish 7: an immediately-rejected submission is written back at once — no 30-minute poll, stance lock released", async () => {
+  const { submitDraft } = await import("../submitter.js");
+  type SdkModule = typeof import("@gensyn-ai/gensyn-delphi-sdk");
+  const dir = mkdtempSync(join(tmpdir(), "aa-"));
+  const cwd = process.cwd();
+  process.chdir(dir); // evidence-log.jsonl / submit-attempts.jsonl writes stay in the sandbox
+  try {
+    const addr = "0x" + "ee".repeat(20);
+    const sig = "sig-live-rejected";
+    writeFileSync(
+      join(dir, "evidence-log.jsonl"),
+      JSON.stringify({
+        ts: "2026-11-26T04:00:00.000Z",
+        marketAddress: addr,
+        topic: "t",
+        stance: "yes",
+        factSignature: sig,
+        status: "drafted",
+        draftPath: "drafts/t",
+        submissionId: null,
+        mode: "live",
+        note: "n",
+      }) + "\n",
+    );
+    const draftDir = join(dir, "draft");
+    mkdirSync(draftDir, { recursive: true });
+    writeFileSync(join(draftDir, "note.md"), "a short note with figures 1 2 3", "utf-8");
+    writeFileSync(join(draftDir, "data.csv"), "row_type,item,value_1,value_2\n", "utf-8");
+    writeFileSync(
+      join(draftDir, "manifest.json"),
+      JSON.stringify({
+        topic: "t",
+        marketAddress: addr,
+        marketQuestion: "q",
+        generatedAt: new Date().toISOString(),
+        mode: "live",
+        asOf: new Date().toISOString(), // < 2h old at submit time
+        stance: "yes",
+        links: ["https://example.com/a"],
+        files: ["data.csv"],
+        factSignature: sig,
+        idempotencyKey: "key-1",
+        submittedAt: null,
+        submissionId: null,
+      }),
+      "utf-8",
+    );
+    const calls: string[] = [];
+    const fakeClient = {
+      getTerms: async () => ({ data: { acceptedAt: "2026-11-01T00:00:00.000Z", url: "t" } }),
+      getLimits: async () => ({ data: { submitsLeftThisHour: 10, hourEndsAt: "2026-11-26T13:00:00.000Z" } }),
+      getEntryState: async () => ({ data: { canSubmit: true, remainingOnMarket: 3, judgementPotRemainingBaseUnits: "20000000" } }),
+      submitEvidence: async () => {
+        calls.push("submitEvidence");
+        return {
+          data: {
+            id: "sub-rej-1",
+            createdAt: "2026-11-26T12:00:00.000Z",
+            agentId: null,
+            note: null,
+            links: [],
+            files: [],
+            status: "rejected",
+            code: "spam",
+            canRetry: false,
+            markets: [
+              { marketAddress: addr, status: "rejected", verdict: null, reason: "spam", bounty: null, settlementUpTo: null },
+            ],
+          },
+        };
+      },
+      waitForSubmission: async () => {
+        calls.push("waitForSubmission");
+        throw new Error("waitForSubmission must NOT be called for an immediately-rejected submission");
+      },
+    } as unknown as InstanceType<SdkModule["EvidenceClient"]>;
+    const cfg = { mode: "live", liveSubmit: true } as unknown as AgentConfig;
+    const out = await submitDraft(cfg, draftDir, { createClient: async () => fakeClient });
+    assert.deepEqual(calls, ["submitEvidence"]);
+    assert.equal(out.submissionId, "sub-rej-1");
+    assert.equal(out.status, "rejected");
+    assert.equal(out.outcome.reason, "spam");
+    // ledger: the entry is "rejected" — a rejected entry releases the stance lock
+    const { EvidenceLog } = await import("../evidence-log.js");
+    const ledger = new EvidenceLog(join(dir, "evidence-log.jsonl"), "live");
+    const entry = ledger.forMarket(addr).find((e) => e.factSignature === sig)!;
+    assert.equal(entry.status, "rejected");
+    assert.equal(entry.submissionId, "sub-rej-1");
+    assert.equal(ledger.lockedStance(addr), null, "rejected entries must not lock a stance");
+    const manifest = JSON.parse(readFileSync(join(draftDir, "manifest.json"), "utf-8")) as { submittedAt: string | null; submissionId: string | null };
+    assert.ok(manifest.submittedAt && manifest.submissionId === "sub-rej-1");
+  } finally {
+    process.chdir(cwd);
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

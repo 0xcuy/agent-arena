@@ -4,7 +4,7 @@ Market: Will Swiss FSO report Nov 2026 CPI YoY inflation ≥1.6% in its Dec 2 re
 Market address: 0xecace7b63b2e044dd339e7512cf4360713a8e156 — evidence cutoff 2026-12-01T07:00:00.000Z
 
 KEY FIGURES (pasted from the sources, fetched in this run; timestamps in data.csv):
-- Swiss LIK Oct 2026: index 101.7 (Dec 2025 = 100), +0,0,2% MoM, YoY Teuerung +1.5% (BFS, published 3 Nov 2026)
+- Swiss LIK Oct 2026: index 101.7 (Dec 2025 = 100), +0.2% MoM, YoY Teuerung +1.5% (BFS, published 3 Nov 2026)
 - Swiss LIK Nov 2025: 107.0 (Dec 2020 = 100), -0.2% MoM (BFS, 3 Dec 2025); LIK Dec 2025: 106.9 (Dec 2020 = 100, BFS, 8 Jan 2026) — chaining puts Nov 2025 at 100.094 on the current Dec 2025 = 100 base
 - Required Nov 2026 index for YoY >= 1.6%: 1.016 x 100.094 = 101.695; required MoM vs Oct's 101.7: -0.005%
 - Nov 2026 LIK publishes on 2 Dec 2026 (BFS release calendar), inside the market's resolution window
@@ -13,7 +13,7 @@ KEY FIGURES (pasted from the sources, fetched in this run; timestamps in data.cs
 Chained BFS base-effect arithmetic (live fetch 2026-11-26): Nov 2026 YoY already runs at +1.5% and the LIK only needs a -0.005% MoM print — against Oct's 101.7 on the Dec-2025=100 base, chained from the BFS Nov/Dec 2025 news (Nov 2025 = 100.094) — to clear +1.6% YoY.
 
 2) SOURCES
-- [1] https://www.admin.ch/de/newnsb/UA8hylpLYO6i — BFS Oct 2026 news (static): LIK +0,0,2% MoM to 101,7 points (Dec 2025=100); YoY Teuerung +1.5%. (de, scraped); fetched 2026-11-26T12:00:00.000Z
+- [1] https://www.admin.ch/de/newnsb/UA8hylpLYO6i — BFS Oct 2026 news (static): LIK +0.2% MoM to 101,7 points (Dec 2025=100); YoY Teuerung +1.5%. (de, scraped); fetched 2026-11-26T04:15:00.000Z
 - data.csv (attached) repeats every figure and series in machine-readable form, one row per source with its URL and UTC fetch timestamp.
 
 3) METHOD
@@ -27,5 +27,5 @@ Chained BFS base-effect arithmetic (live fetch 2026-11-26): Nov 2026 YoY already
 
 4) FORECAST COMPARISON
 - Market implied P(yes) at snapshot: 47.8%
-- This evidence implies P(yes) ≈ 55.7% (confidence: medium) — it pushes the YES side up.
+- This evidence implies P(yes) ≈ 55.7% (confidence: medium); relative to the market snapshot, the evidence is consistent with a higher P(yes).
 - Stance: YES side only. No evidence is submitted for the opposite side of this market.

@@ -2,7 +2,7 @@
   "topic": "ch-war-materiel",
   "marketAddress": "0x191257a08df3a827a9a02fa54926ed9507b4497a",
   "marketQuestion": "Will Swiss voters approve the 19 Dec 2025 amendment to the War Materiel Act in the federal vote of Nov 29, 2026?",
-  "generatedAt": "2026-11-26T04:09:04.281Z",
+  "generatedAt": "2026-11-26T04:38:36.928Z",
   "mode": "mock",
   "asOf": "2026-11-26T12:00:00.000Z",
   "stance": "yes",
@@ -13,7 +13,7 @@
     "data.csv"
   ],
   "factSignature": "0464c0244aef3b1c85af975916cedfc75be7e9f3b2c39cccfba0d02f9c7be936",
-  "idempotencyKey": "a8b5dc64-01b1-4bb2-b28c-c523501ee013",
+  "idempotencyKey": "3f5c1886-a163-416a-bc6a-63a819748a34",
   "submittedAt": null,
   "submissionId": null
 }

@@ -11,15 +11,15 @@ KEY FIGURES (pasted from the sources, fetched in this run; timestamps in data.cs
 Live oven-sh/bun release history (fetched 2026-11-26, full list in the CSV) gives an empirical release-gap distribution; the market window [2026-11-28..2026-12-11] is scored against exactly those live gaps.
 
 2) SOURCES
-- [1] https://api.github.com/repos/oven-sh/bun/releases?per_page=15 — oven-sh/bun releases API (JSON): publish dates of the 15 most recent releases, parsed live in this run. (en, api-json); fetched 2026-11-26T12:00:00.000Z
+- [1] https://api.github.com/repos/oven-sh/bun/releases?per_page=15 — oven-sh/bun releases API (JSON): publish dates of the 15 most recent releases, parsed live in this run. (en, api-json); fetched 2026-11-26T04:15:00.000Z
 - data.csv (attached) repeats every figure and series in machine-readable form, one row per source with its URL and UTC fetch timestamp.
 
 3) METHOD
-- Last 15 release dates (fetched live): mean gap 22.1 days, median 18 days, max 99 days.
+- Last 15 release dates (fetched live): mean gap 22.1 days, median 16.5 days, max 99 days.
 - Window 2026-11-28..2026-12-11 given last release 2026-11-19.
 - Empirical: 7/14 historical gaps fall in the window => P ~ 0.50.
 
 4) FORECAST COMPARISON
 - Market implied P(yes) at snapshot: 54.0%
-- This evidence implies P(yes) ≈ 50.0% (confidence: high) — it pushes the NO side down.
+- This evidence implies P(yes) ≈ 50.0% (confidence: high); relative to the market snapshot, the evidence is consistent with a lower P(yes).
 - Stance: NO side only. No evidence is submitted for the opposite side of this market.

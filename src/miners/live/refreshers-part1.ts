@@ -151,7 +151,7 @@ export async function refreshDeCpi(seed: SeedInput, api: SourceApi, ctx: Refresh
   ];
   const headline =
     `Base-effect arithmetic on Destatis's live VPI series (fetched ${ctx.now.toISOString().slice(0, 10)}): ` +
-    `the Nov 2026 Vorkorrektur only needs a ${(requiredMom * 100).toFixed(2)}% MoM print to reach +${thr}% YoY — ` +
+    `the Nov 2026 Vorläufiges Ergebnis (preliminary result) only needs a ${(requiredMom * 100).toFixed(2)}% MoM print to reach +${thr}% YoY — ` +
     `consumer prices could fall by ${(Math.abs(requiredMom) * 100).toFixed(2)}% on the month and the market's bar would still clear, ` +
     `because the Oct 2026 index (${idx.toFixed(1)}) already sits above the ${thr}%-implied level against the Nov 2025 base (${idxPrev.toFixed(1)}).`;
 
@@ -227,7 +227,7 @@ export async function refreshChCpi(seed: SeedInput, api: SourceApi, ctx: Refresh
   const seasonal = seed.assumptions.novMomPct10y as number[];
 
   const figures = [
-    `Swiss LIK Oct 2026: index ${idxNew.toFixed(1)} (Dec 2025 = 100), +0,${momNewRaw}% MoM, YoY Teuerung +${yoyNew.toFixed(1)}% (BFS, published 3 Nov 2026)`,
+    `Swiss LIK Oct 2026: index ${idxNew.toFixed(1)} (Dec 2025 = 100), +${momNew.toFixed(1)}% MoM, YoY Teuerung +${yoyNew.toFixed(1)}% (BFS, published 3 Nov 2026)`,
     `Swiss LIK Nov 2025: ${idxNovPrevOld.toFixed(1)} (Dec 2020 = 100), ${momPrev.toFixed(1)}% MoM (BFS, 3 Dec 2025); LIK Dec 2025: ${idxDecPrevOld.toFixed(1)} (Dec 2020 = 100, BFS, 8 Jan 2026) — chaining puts Nov 2025 at ${idxNovPrevNew.toFixed(3)} on the current Dec 2025 = 100 base`,
     `Required Nov 2026 index for YoY >= ${thr}%: 1.0${String(thr).replace(".", "")} x ${idxNovPrevNew.toFixed(3)} = ${requiredIndex.toFixed(3)}; required MoM vs Oct's ${idxNew.toFixed(1)}: ${(requiredMom * 100).toFixed(3)}%`,
     `Nov 2026 LIK publishes on 2 Dec 2026 (BFS release calendar), inside the market's resolution window`,
@@ -252,7 +252,7 @@ export async function refreshChCpi(seed: SeedInput, api: SourceApi, ctx: Refresh
     headline,
     figures,
     [
-      `BFS Oct 2026 news (static): LIK +0,${momNewRaw}% MoM to ${idxNewRaw} points (Dec 2025=100); YoY Teuerung +${dot(yoyNewRaw)}%.`,
+      `BFS Oct 2026 news (static): LIK +${momNew.toFixed(1)}% MoM to ${idxNewRaw} points (Dec 2025=100); YoY Teuerung +${dot(yoyNewRaw)}%.`,
       `BFS Nov 2025 (${novPrevDoc.url}) + Dec 2025 (${decPrevDoc.url}) news (static, both fetched in this run): ${idxNovPrevRaw} then ${idxDecPrevRaw} on Dec 2020=100, used only to chain the Nov 2025 comparandum onto the current base; URLs + fetch times also in data.csv source rows.`,
     ],
     links,

@@ -7,5 +7,5 @@ model,Elo expected score,0.5966
 model,per-game win/draw/loss for Sindarov,0.222/0.750/0.028
 scenario,games remaining to market evaluation,6
 scenario,P(Sindarov strictly ahead),0.711
-source,https://www.fide.com/new-documents/,2026-11-26T12:00:00.000Z
-source,https://worldchess.com/watch/fide-world-chess-championship-2026,2026-11-26T12:00:00.000Z
+source,https://www.fide.com/new-documents/,2026-11-26T04:15:00.000Z
+source,https://worldchess.com/watch/fide-world-chess-championship-2026,2026-11-26T04:15:00.000Z

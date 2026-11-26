@@ -2,7 +2,7 @@
   "topic": "wikipedia-articles",
   "marketAddress": "0x7a17b76f7f1cda20e8bc5a88166c4732e6db39f5",
   "marketQuestion": "Will English Wikipedia siteinfo API show ≥7,275,500 articles at 12:00 UTC on Dec 10, 2026?",
-  "generatedAt": "2026-11-26T04:09:04.067Z",
+  "generatedAt": "2026-11-26T04:38:36.726Z",
   "mode": "mock",
   "asOf": "2026-11-26T12:00:00.000Z",
   "stance": "yes",
@@ -12,8 +12,8 @@
   "files": [
     "data.csv"
   ],
-  "factSignature": "7b35d5093a0cab9f4967e79d20693b413297ca70a6525b333d2d0ea78fe3c173",
-  "idempotencyKey": "d0f4ec7b-a21f-4c81-88ba-bfad72450fd4",
+  "factSignature": "4e1d3e98e0bfdd44e3485cae55b963a3b8583597f82608bddec4cfd741fc0883",
+  "idempotencyKey": "775e2471-4081-4fe4-9959-77cfaf833b2a",
   "submittedAt": null,
   "submissionId": null
 }

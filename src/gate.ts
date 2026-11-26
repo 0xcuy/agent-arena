@@ -15,6 +15,7 @@ export const ITEM_BUDGET = 3;
 export const MIN_EDGE_PCT = 2.5; // evidence must move the implied probability by at least this
 export const MAX_NOTE_CHARS = 8000;
 export const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MB per attached file
+export const MAX_TOTAL_FILE_BYTES = 10 * 1024 * 1024; // 10 MB TOTAL across ALL attached files
 export const MAX_AS_OF_AGE_MS = 2 * 60 * 60 * 1000; // asOf must be fresher than 2h at gate time
 
 /** Evidence must never cite prediction/betting markets or bookmakers (banned content, $0). */
@@ -170,11 +171,18 @@ export function gateCandidate(c: EvidenceCandidate, ctx: GateContext): GateVerdi
     reasons.push(`note too long: ${ctx.note.length} > ${MAX_NOTE_CHARS} chars`);
   }
 
-  // File size: submissions cap at 10 MB per file.
+  // File size: submissions cap at 10 MB per file AND 10 MB in TOTAL across all
+  // attached files (the API cap is a total, not a per-file allowance).
   for (const [i, size] of ctx.fileSizes.entries()) {
     if (size > MAX_FILE_BYTES) {
       reasons.push(`attached file #${i + 1} too large: ${size} > ${MAX_FILE_BYTES} bytes`);
     }
+  }
+  const totalFileBytes = ctx.fileSizes.reduce((a, b) => a + b, 0);
+  if (totalFileBytes > MAX_TOTAL_FILE_BYTES) {
+    reasons.push(
+      `attached files total ${totalFileBytes} bytes > ${MAX_TOTAL_FILE_BYTES} (the 10 MB cap is TOTAL across all attached files, not per file)`,
+    );
   }
 
   // asOf freshness: the evidence snapshot must be from this run (< 2h old).
@@ -183,15 +191,17 @@ export function gateCandidate(c: EvidenceCandidate, ctx: GateContext): GateVerdi
     reasons.push(`asOf ${c.asOf} is not fresh (age ${(asOfAge / 3_600_000).toFixed(1)}h, limit 2h)`);
   }
 
-  // Freshness vs the market's resolution window. Two cases:
-  //  - PAST baseline ("figure published strictly after <ts>" already passed): every
-  //    source fetch must sit AFTER that baseline — pre-baseline publications are stale
-  //    facts and earn $0.
-  //  - FUTURE baseline ("event published strictly after <ts> and before ..."): the
-  //    market resolves on an event that has not happened yet; the fetch must be fresh
-  //    from THIS run (already enforced by the 2h asOf rule), which is the live readout
-  //    the event will follow. A hard fetchedAt > baseline would wrongly reject every
-  //    fetch made before the event window even opens.
+  // Freshness vs the market's resolution window. Two independent checks:
+  //  - BASELINE ("figure published strictly after <ts>" already passed): every
+  //    source fetch must sit AFTER that baseline — pre-baseline publications are
+  //    stale facts and earn $0.
+  //  - EVIDENCE CUTOFF: every source fetch must sit BEFORE the market's evidence
+  //    cutoff — enforced on EVERY market (Wave 2 criteria without a "strictly
+  //    after" regex included); a parsed baseline is not required for it.
+  //    A future window-start baseline is not a freshness floor: for markets
+  //    whose event has not happened yet the live readout comes from the 2h
+  //    same-run asOf rule; a hard fetchedAt > window-start would wrongly
+  //    reject every fetch made before the event window even opens.
   const baseline = marketBaselineTimestamp(ctx.market.resolutionCriteria);
   const cutoff = new Date(ctx.market.evidenceCutoffAt);
   const baselineIsPast = baseline !== null && baseline.getTime() <= ctx.now.getTime();
@@ -204,7 +214,7 @@ export function gateCandidate(c: EvidenceCandidate, ctx: GateContext): GateVerdi
     if (baselineIsPast && d.getTime() <= baseline!.getTime()) {
       reasons.push(`source fetched ${t} is NOT after the market's resolution baseline ${baseline!.toISOString()} (stale facts earn $0)`);
     }
-    if (baseline && d.getTime() >= cutoff.getTime()) {
+    if (d.getTime() >= cutoff.getTime()) {
       reasons.push(`source fetched ${t} is after the evidence cutoff ${ctx.market.evidenceCutoffAt}`);
     }
   }

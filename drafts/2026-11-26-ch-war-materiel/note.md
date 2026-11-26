@@ -13,7 +13,7 @@ KEY FIGURES (pasted from the sources, fetched in this run; timestamps in data.cs
 Second SRG trend survey for the 29.11.2026 vote (published 18.11.2026, gfs.bern): the War Materiel Act amendment stands at 49% yes / 46% no among teilnahmewilligen respondents — 51.6% of decided — with the no side gaining +5pp since wave 1 while the yes count stays flat; participation intention runs 52% vs the 47.3% long-term average.
 
 2) SOURCES
-- [1] https://www.gfsbern.ch/de/news/2-srg-trendumfrage-zur-eidg-abstimmung-vom-29-november-2026/ — gfs.bern news page (static): 2nd SRG-Trendumfrage, field 4-11 Nov 2026, KM 49% yes / 46% no. (de, scraped); fetched 2026-11-26T12:00:00.000Z
+- [1] https://www.gfsbern.ch/de/news/2-srg-trendumfrage-zur-eidg-abstimmung-vom-29-november-2026/ — gfs.bern news page (static): 2nd SRG-Trendumfrage, field 4-11 Nov 2026, KM 49% yes / 46% no. (de, scraped); fetched 2026-11-26T04:15:00.000Z
 - data.csv (attached) repeats every figure and series in machine-readable form, one row per source with its URL and UTC fetch timestamp.
 
 3) METHOD
@@ -26,5 +26,5 @@ Second SRG trend survey for the 29.11.2026 vote (published 18.11.2026, gfs.bern)
 
 4) FORECAST COMPARISON
 - Market implied P(yes) at snapshot: 54.9%
-- This evidence implies P(yes) ≈ 67.4% (confidence: medium) — it pushes the YES side up.
+- This evidence implies P(yes) ≈ 67.4% (confidence: medium); relative to the market snapshot, the evidence is consistent with a higher P(yes).
 - Stance: YES side only. No evidence is submitted for the opposite side of this market.

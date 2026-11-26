@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { appendFileSync } from "node:fs";
+import { appendFileSync, readFileSync } from "node:fs";
 import test from "node:test";
 import { checkEligibility, rankMarkets } from "../filter.js";
 import { gateCandidate, marketBaselineTimestamp, ITEM_BUDGET } from "../gate.js";
@@ -321,4 +321,82 @@ test("evidence-log: legacy untagged entries are treated as mock", () => {
   const mockLog = new EvidenceLog(path, "mock");
   assert.equal(mockLog.hasSignature("legacy-sig"), true);
   rmSync(dir, { recursive: true, force: true });
+});
+
+// ------------------------------------------------------------ run-3 polish
+
+test("evidence-log: update() is mode-scoped — a live update can never patch a mock row", () => {
+  const dir = mkdtempSync(join(tmpdir(), "aa-"));
+  const path = join(dir, "log.jsonl");
+  const append = (mode: "mock" | "live", sig: string) =>
+    appendFileSync(
+      path,
+      JSON.stringify({
+        ts: "2026-11-26T12:00:00.000Z",
+        marketAddress: "0x" + "cc".repeat(20),
+        topic: "t",
+        stance: "yes",
+        factSignature: sig,
+        status: "drafted",
+        draftPath: `drafts/${mode}`,
+        submissionId: null,
+        mode,
+        note: mode,
+      }) + "\n",
+    );
+  // Same marketAddress + factSignature in BOTH modes.
+  append("mock", "shared-sig");
+  append("live", "shared-sig");
+  const liveLog = new EvidenceLog(path, "live");
+  liveLog.update("0x" + "cc".repeat(20), "shared-sig", { status: "submitted", submissionId: "sub-live" });
+  const rows = readFileSync(path, "utf-8").trim().split("\n").map((l) => JSON.parse(l) as { mode: string; status: string; submissionId: string | null });
+  const mockRow = rows.find((r) => r.mode === "mock")!;
+  const liveRow = rows.find((r) => r.mode === "live")!;
+  assert.equal(mockRow.status, "drafted");
+  assert.equal(mockRow.submissionId, null);
+  assert.equal(liveRow.status, "submitted");
+  assert.equal(liveRow.submissionId, "sub-live");
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("gate: evidence cutoff enforced even without a 'strictly after' baseline (Wave 2 criteria)", () => {
+  const log = newLog();
+  const market = fakeMarket(0.5);
+  assert.ok(marketBaselineTimestamp(market.resolutionCriteria) !== null); // wave-1 style
+  const wave2 = { ...market, resolutionCriteria: "Resolves on the official figure for the month. No baseline regex at all." };
+  assert.equal(marketBaselineTimestamp(wave2.resolutionCriteria), null);
+  // A source fetched after the cutoff must be rejected with NO parsed baseline.
+  const late = gateCandidate(fakeCandidate(), gateCtx(log, { market: wave2, sourceFetchTimes: ["2026-12-05T12:00:00.000Z"] }));
+  assert.ok(late.reasons.some((r) => r.includes("after the evidence cutoff")), JSON.stringify(late.reasons));
+  // ... while a fetch before the cutoff still passes the cutoff check.
+  const early = gateCandidate(fakeCandidate(), gateCtx(log, { market: wave2, sourceFetchTimes: [NOW.toISOString()] }));
+  assert.ok(!early.reasons.some((r) => r.includes("evidence cutoff")), JSON.stringify(early.reasons));
+});
+
+test("gate: the 10 MB file cap is TOTAL across all attached files (per-file sizes alone may pass)", () => {
+  const log = newLog();
+  const half = Math.floor(10 * 1024 * 1024 * 0.6); // 6 MB each — under the per-file cap
+  const v = gateCandidate(fakeCandidate(), gateCtx(log, { fileSizes: [half, half] }));
+  assert.equal(v.pass, false);
+  assert.ok(v.reasons.some((r) => r.includes("TOTAL across all attached files")), JSON.stringify(v.reasons));
+  assert.ok(!v.reasons.some((r) => r.includes("too large")), "per-file sizes are each below the cap");
+  // A single 6 MB file passes both checks.
+  const ok = gateCandidate(fakeCandidate(), gateCtx(log, { fileSizes: [half] }));
+  assert.ok(!ok.reasons.some((r) => r.includes("TOTAL across all attached files") || r.includes("too large")));
+});
+
+test("composeNote: neutral forecast-comparison phrasing (no 'pushes the YES side up')", async () => {
+  const { composeNote } = await import("../draft.js");
+  const c = fakeCandidate(); // stance yes, evidence-implied 0.75
+  const note = composeNote(c, fakeMarket(0.5));
+  assert.ok(!note.includes("pushes the"), note);
+  assert.ok(note.includes("P(yes) ≈ 75.0%"), note);
+  assert.ok(note.includes("consistent with a higher P(yes)"), note);
+  // a NO-side candidate gets the mirrored, equally neutral line
+  const noSide = fakeCandidate({ stance: "no", analysis: { kind: "cpi_required_mom", evidenceImpliedYes: 0.25, confidence: "medium", methodLines: [], figureSummary: "" } });
+  const noteNo = composeNote(noSide, fakeMarket(0.5));
+  assert.ok(noteNo.includes("P(yes) ≈ 25.0%") && noteNo.includes("consistent with a lower P(yes)"), noteNo);
+  // per-link fetch times are stamped on the SOURCES lines (not the run clock)
+  const stamped = composeNote(c, fakeMarket(0.5), [], ["2026-11-26T04:15:00.000Z"]);
+  assert.ok(stamped.includes("fetched 2026-11-26T04:15:00.000Z"), stamped);
 });

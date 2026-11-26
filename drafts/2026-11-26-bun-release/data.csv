@@ -18,4 +18,4 @@ last release before window,2026-11-19,
 market window [2026-11-28..2026-12-11],,
 historical gaps landing inside window,7/14,
 "P(next release in window), empirical",0.500,
-source,https://api.github.com/repos/oven-sh/bun/releases?per_page=15,2026-11-26T12:00:00.000Z
+source,https://api.github.com/repos/oven-sh/bun/releases?per_page=15,2026-11-26T04:15:00.000Z

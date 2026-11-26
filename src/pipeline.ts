@@ -176,9 +176,12 @@ export async function runPipeline(cfg: AgentConfig, opts: RunOptions): Promise<R
     const sourceMeta = refreshed.docs.map((d) => ({ url: d.url, fetchedAt: d.fetchedAt }));
     const analysis = runAnalysis(spec, csvPath, asOf, sourceMeta);
     const candidate = assembleCandidate(spec, market, analysis, asOf);
+    // Per-link fetch times (mock mode: the fixtures' recorded fetch times, not the
+    // mock run clock) so the note's SOURCES lines match the CSV source rows.
+    const linkFetchedAt = candidate.links.map((l) => verify.docs.get(l.url)?.fetchedAt ?? asOf);
 
     // 10. Strict pre-submit gate on the exact note + attachment that would ship.
-    const note = composeNote(candidate, market, refreshed.assumptions);
+    const note = composeNote(candidate, market, refreshed.assumptions, linkFetchedAt);
     let csvBytes = 0;
     try {
       csvBytes = statSync(csvPath).size;
@@ -202,7 +205,7 @@ export async function runPipeline(cfg: AgentConfig, opts: RunOptions): Promise<R
     }
 
     // 11. Draft: note + CSV + manifest under drafts/<date>-<topic>/.
-    const draft = writeDraft(candidate, market, cfg.mode, runDate, refreshed.assumptions);
+    const draft = writeDraft(candidate, market, cfg.mode, runDate, refreshed.assumptions, linkFetchedAt);
     writeFileSync(draft.csv, readFileSync(csvPath, "utf-8"), "utf-8");
     report.draftsWritten.push(draft.dir);
     inFlightByMarket.set(market.address, (inFlightByMarket.get(market.address) ?? 0) + 1);

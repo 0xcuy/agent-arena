@@ -138,9 +138,12 @@ export async function refreshFideMatch(seed: SeedInput, api: SourceApi, ctx: Ref
   const scoreB = requireNum(grp(scoreM, 2, "Gukesh score"), "Gukesh score");
   const gameM = rx(fide, /FACT SHEET – Game (\d+)/, "factsheet game number");
   const gamesPlayed = requireNum(grp(gameM, 1, "games played"), "games played");
-  const whiteM = rx(fide, /FACT SHEET – Game \d+[\s\S]*?White: ([A-Za-zÉé]+(?:\s[A-Za-z]+)*)/, "White player");
+  // The factsheet reads "White: <name> Black: <name> Result:" on one scraped
+  // line; each name capture is bounded by the NEXT label so the table artifact
+  // ("Gukesh Dommaraju Black / Javokhir Sindarov Result") cannot leak in.
+  const whiteM = rx(fide, /FACT SHEET – Game \d+[\s\S]*?White: ([A-Za-zÉé]+(?:\s[A-Za-zÉé]+)*?)\s+Black:/, "White player");
   const whiteName = grp(whiteM, 1, "White player").trim();
-  const blackM = rx(fide, /FACT SHEET – Game \d+[\s\S]*?Black: ([A-Za-zÉé]+(?:\s[A-Za-z]+)*)/, "Black player");
+  const blackM = rx(fide, /FACT SHEET – Game \d+[\s\S]*?Black: ([A-Za-zÉé]+(?:\s[A-Za-zÉé]+)*?)\s+Result:/, "Black player");
   const blackName = grp(blackM, 1, "Black player").trim();
   const ratingA = requireNum(
     grp(rx(ratingsDoc.body, /shortName\\?"?:?\\?"?Sindarov[^}]{0,120}rating\\?"?:(\d{4})/, "Sindarov rating"), 1, "Sindarov rating"),
@@ -156,7 +159,7 @@ export async function refreshFideMatch(seed: SeedInput, api: SourceApi, ctx: Ref
   const drawShare = Number(seed.assumptions.drawShare);
 
   const figures = [
-    `FIDE official factsheet (fide.com/new-documents, fetched ${ctx.now.toISOString().slice(0, 10)}): game ${gamesPlayed} ended ${whiteName} (White) vs ${blackName} (Black) with result ½-½; match score ${scoreA}-${scoreB}`,
+    `FIDE official factsheet (fide.com/new-documents, fetched ${ctx.now.toISOString().slice(0, 10)}): game ${gamesPlayed} ended ½-½; match score ${scoreA}-${scoreB} (White: ${whiteName}, Black: ${blackName})`,
     `Elo ratings of the two players (worldchess.com event metadata, live pages): Sindarov ${ratingA} (UZB) vs Gukesh ${ratingB} (IND) — a ${ratingA - ratingB} Elo gap`,
     `Color allocation in the match so far: Sindarov held White in games 1 and 3 (stated in the factsheet's game-3 preview: "white pieces for the second time in the match tomorrow")`,
     `Model: exact enumeration of the ${gamesRemaining} remaining games (to the market's after-game-${targetGame} evaluation) with per-game W/D/L derived from the live Elo gap and a stated ${(drawShare * 100).toFixed(0)}% draw-share assumption, color-averaged`,
@@ -224,7 +227,10 @@ export async function refreshWikipedia(seed: SeedInput, api: SourceApi, ctx: Ref
   const cutoffAt = String(seed.market.cutoffAt);
   const daysRemaining = Math.max((new Date(cutoffAt).getTime() - ctx.now.getTime()) / 86_400_000, 0.1);
   const yearStartMs = Date.UTC(ctx.now.getUTCFullYear(), 0, 1);
-  const daysElapsed = Math.max((ctx.now.getTime() - yearStartMs) / 86_400_000, 1);
+  // Whole days elapsed since Jan 1 (the Size-of-Wikipedia table rows are daily):
+  // the SAME day count feeds the KEY FIGURES velocity and the METHOD line in the
+  // CSV, so both always show one consistent number.
+  const daysElapsed = Math.max(Math.floor((ctx.now.getTime() - yearStartMs) / 86_400_000), 1);
   const dailyNetMean = netYtd / daysElapsed;
   const dailyNetSd = Number(seed.assumptions.dailyNetSd);
 
@@ -234,16 +240,16 @@ export async function refreshWikipedia(seed: SeedInput, api: SourceApi, ctx: Ref
 
   const figures = [
     `English Wikipedia siteinfo API (fetched live, timestamp in the CSV): ${articles.toLocaleString("en-US")} articles`,
-    `Net growth so far this ${year} (live "Size of Wikipedia" table): +${netYtd.toLocaleString("en-US")} since the ${year}-01-01 value of ${yearStart.toLocaleString("en-US")} — ~${dailyNetMean.toFixed(1)}/day`,
+    `Net growth so far this ${year} (live "Size of Wikipedia" table): +${netYtd.toLocaleString("en-US")} over the ${daysElapsed} days since the ${year}-01-01 value of ${yearStart.toLocaleString("en-US")} — ${dailyNetMean.toFixed(1)}/day`,
     `Required net to reach ${target.toLocaleString("en-US")} by ${cutoffAt.slice(0, 16).replace("T", " ")} UTC: +${required.toLocaleString("en-US")} = ${requiredPerDay.toFixed(1)}/day over the ${daysRemaining.toFixed(1)} days left`,
     requiredPerDay <= dailyNetMean
-      ? `The required pace (${requiredPerDay.toFixed(0)}/day) is BELOW the live observed pace (${dailyNetMean.toFixed(0)}/day)`
-      : `The required pace (${requiredPerDay.toFixed(0)}/day) is ABOVE the live observed pace (${dailyNetMean.toFixed(0)}/day)`,
+      ? `The 2026 required pace (${requiredPerDay.toFixed(1)}/day) is BELOW the live observed pace of ${dailyNetMean.toFixed(1)}/day (from the pasted +${netYtd.toLocaleString("en-US")} net over ${daysElapsed} days)`
+      : `The 2026 required pace (${requiredPerDay.toFixed(1)}/day) is ABOVE the live observed pace of ${dailyNetMean.toFixed(1)}/day (from the pasted +${netYtd.toLocaleString("en-US")} net over ${daysElapsed} days)`,
   ];
   const headline =
     `Live siteinfo + the Size-of-Wikipedia growth table (fetched ${ctx.now.toISOString().slice(0, 10)}) put English Wikipedia at ` +
-    `${articles.toLocaleString("en-US")} articles with a net creation pace of ~${dailyNetMean.toFixed(0)}/day this year; reaching ${target.toLocaleString("en-US")} by the market's check time needs ` +
-    `${requiredPerDay.toFixed(0)}/day — ${requiredPerDay <= dailyNetMean ? "a pace the current velocity is already beating" : "a faster pace than observed"}.`;
+    `${articles.toLocaleString("en-US")} articles with a net creation pace of ${dailyNetMean.toFixed(1)}/day this year (net +${netYtd.toLocaleString("en-US")} over ${daysElapsed} days); reaching ${target.toLocaleString("en-US")} by the market's check time needs ` +
+    `${requiredPerDay.toFixed(1)}/day — ${requiredPerDay <= dailyNetMean ? "a pace the current velocity is already beating" : "a faster pace than observed"}.`;
 
   const links: SourceLink[] = [
     {
@@ -274,7 +280,7 @@ export async function refreshWikipedia(seed: SeedInput, api: SourceApi, ctx: Ref
         dailyNetSd,
         velocity: {
           label: `${year} year-to-date`,
-          days: Number(daysElapsed.toFixed(0)),
+          days: daysElapsed,
           net: netYtd,
         },
       },

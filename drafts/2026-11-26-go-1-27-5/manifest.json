@@ -2,7 +2,7 @@
   "topic": "go-1-27-5",
   "marketAddress": "0xf640443d15af94932e1a7294c15312f0ad9e1136",
   "marketQuestion": "Will Go 1.27.5 be listed with a release date at go.dev/doc/devel/release by 2026-12-08 23:59 UTC?",
-  "generatedAt": "2026-11-26T04:09:03.985Z",
+  "generatedAt": "2026-11-26T04:38:36.652Z",
   "mode": "mock",
   "asOf": "2026-11-26T12:00:00.000Z",
   "stance": "no",
@@ -13,7 +13,7 @@
     "data.csv"
   ],
   "factSignature": "318147a471024b71f8eb9e0cccf3ac3eb96414e02ef9612d21c9b1d72b6001cc",
-  "idempotencyKey": "a7f9c794-0ad2-4c25-8b0b-e23bfc8158f6",
+  "idempotencyKey": "bc80c3aa-0e6e-4b0f-8c4d-69ad6537b443",
   "submittedAt": null,
   "submissionId": null
 }

@@ -1,7 +1,6 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { AgentConfig } from "../../config.js";
-import { MOCK_NOW } from "../../delphi/fixtures.js";
 
 /**
  * Live-source fetch layer. Zero-hallucination invariant: every number that
@@ -30,9 +29,20 @@ export interface SourceApi {
 export const FETCH_STALENESS_MS = 2 * 60 * 60 * 1000; // 2 hours
 
 const FIXTURES_PATH = fileURLToPath(new URL("./fixtures.json", import.meta.url));
+const FIXTURES_META_PATH = fileURLToPath(new URL("./fixtures-meta.json", import.meta.url));
 
 /** Recorded snapshots of real HTTP-200 fetches (see FIX-REPORT / fixtures provenance). */
 export const LIVE_FIXTURES: Record<string, string> = JSON.parse(readFileSync(FIXTURES_PATH, "utf-8"));
+
+/**
+ * The recorded fetch time of each fixture snapshot: when that body was actually
+ * fetched (2026-11-26 ~03:50-04:30 UTC recording session, all URLs re-verified
+ * HTTP 200 at ~04:15 UTC — per-URL second-level times were not recorded).
+ * Mock-mode SourceDocs carry THIS timestamp, never the mock run clock, so notes
+ * and CSVs never misrepresent when a source was fetched. A fixture without a
+ * recorded fetch time is a hard fail.
+ */
+export const FIXTURE_FETCHED_AT: Record<string, string> = JSON.parse(readFileSync(FIXTURES_META_PATH, "utf-8"));
 
 export function htmlToText(html: string): string {
   return html
@@ -53,9 +63,8 @@ export function htmlToText(html: string): string {
 
 const UA = "siera-labs-evidence-miner/1.0 (+https://delphi.fyi)";
 
-export function createSources(cfg: AgentConfig, opts?: { mockNow?: string }): SourceApi {
+export function createSources(cfg: AgentConfig): SourceApi {
   if (cfg.mode === "mock") {
-    const fetchedAt = opts?.mockNow ?? MOCK_NOW;
     return {
       mock: true,
       fetch: async (url: string) => {
@@ -63,6 +72,11 @@ export function createSources(cfg: AgentConfig, opts?: { mockNow?: string }): So
         if (body === undefined) {
           // A missing fixture is a hard fail: never fall back to invented content.
           throw new Error(`mock source missing for ${url} (no fixture — refusing to invent content)`);
+        }
+        const fetchedAt = FIXTURE_FETCHED_AT[url];
+        if (fetchedAt === undefined) {
+          // Mock mode must carry the real recorded fetch time, never the mock clock.
+          throw new Error(`mock source ${url} has no recorded fetchedAt in fixtures-meta.json (refusing to invent a fetch time)`);
         }
         const doc: SourceDoc = { url, body, fetchedAt, status: 200, mock: true };
         if (looksLikeJsonBody(body)) doc.json = JSON.parse(body);

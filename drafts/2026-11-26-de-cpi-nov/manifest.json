@@ -2,7 +2,7 @@
   "topic": "de-cpi-nov",
   "marketAddress": "0x0d79f61a3cf6c6a83501fcb6abd22eddb4ab6a58",
   "marketQuestion": "Will Destatis's preliminary German CPI (VPI) annual rate for Nov 2026, published 2026-11-30, be 2.8% or higher?",
-  "generatedAt": "2026-11-26T04:09:03.682Z",
+  "generatedAt": "2026-11-26T04:38:36.372Z",
   "mode": "mock",
   "asOf": "2026-11-26T12:00:00.000Z",
   "stance": "yes",
@@ -12,8 +12,8 @@
   "files": [
     "data.csv"
   ],
-  "factSignature": "fa61beb23ae34a5ec11afc083f592b64ba8aa8142f1b4c245888c9ac84aee7a2",
-  "idempotencyKey": "62422d33-0c1e-40d4-bb15-0ca6292de575",
+  "factSignature": "84b9c4118fcd8b1de167ae6a1e9cd56145d709a19e0da61f4289dc2331968763",
+  "idempotencyKey": "59a62c81-e764-4b91-a195-4d0705414acc",
   "submittedAt": null,
   "submissionId": null
 }

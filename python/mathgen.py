@@ -28,6 +28,16 @@ def mean(xs):
     return sum(xs) / len(xs)
 
 
+def median(xs):
+    """Standard median: middle value, or the mean of the two middle values
+    when n is even (never the upper-middle element alone)."""
+    s = sorted(xs)
+    n = len(s)
+    if n % 2:
+        return s[n // 2]
+    return (s[n // 2 - 1] + s[n // 2]) / 2.0
+
+
 def sd(xs):
     if len(xs) < 2:
         return 0.0
@@ -316,7 +326,7 @@ def release_gap_cdf(p):
     rows.append([f"P(next release in window), empirical", fmt(p_yes, 3), ""])
     method = [
         f"Last {len(gaps) + 1} release dates (fetched live): mean gap {mean(gaps):.1f} days, "
-        f"median {sorted(gaps)[len(gaps)//2]} days, max {max(gaps)} days.",
+        f"median {median(gaps):.1f} days, max {max(gaps)} days.",
         f"Window {p['windowStart']}..{p['windowEnd']} given last release {last.isoformat()}.",
         f"Empirical: {hit}/{len(gaps)} historical gaps fall in the window => P ~ {p_yes:.2f}.",
     ]

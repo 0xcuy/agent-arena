@@ -68,7 +68,9 @@ export class EvidenceLog {
   /** Update fields of an existing entry in place (used by the submitter write-back) and rewrite the file. */
   update(address: string, factSignature: string, patch: Partial<EvidenceLogEntry>): void {
     const a = norm(address);
-    const entry = this.entries.find((e) => norm(e.marketAddress) === a && e.factSignature === factSignature);
+    // Mode-scoped: a live update can never patch a mock row (and vice versa),
+    // exactly like every other lookup in this log.
+    const entry = this.visible().find((e) => norm(e.marketAddress) === a && e.factSignature === factSignature);
     if (!entry) throw new Error(`ledger update: no entry for ${address} / ${factSignature.slice(0, 12)}`);
     Object.assign(entry, patch);
     // The ledger is append-only for run artifacts; the one sanctioned in-place rewrite

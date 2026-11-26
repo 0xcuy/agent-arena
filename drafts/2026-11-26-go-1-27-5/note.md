@@ -12,11 +12,11 @@ KEY FIGURES (pasted from the sources, fetched in this run; timestamps in data.cs
 go.dev lists go1.27.4 as the newest go1.27.x minor (released 2026-11-10), and the Go1.27.5 milestone (looked up by title — number 457) still shows 14 open blockers; the live minor-release gaps (37/11/22 days) are scored against the listing window [2026-11-26..2026-12-07] in the CSV.
 
 2) SOURCES
-- [1] https://go.dev/doc/devel/release — go.dev release history (static): parsed live this run. (en, scraped); fetched 2026-11-26T12:00:00.000Z
+- [1] https://go.dev/doc/devel/release — go.dev release history (static): parsed live this run. (en, scraped); fetched 2026-11-26T04:15:00.000Z
 - data.csv (attached) repeats every figure and series in machine-readable form, one row per source with its URL and UTC fetch timestamp.
 
 3) METHOD
-- Last 4 release dates (fetched live): mean gap 23.3 days, median 22 days, max 37 days.
+- Last 4 release dates (fetched live): mean gap 23.3 days, median 22.0 days, max 37 days.
 - Window 2026-11-26..2026-12-07 given last release 2026-11-10.
 - Empirical: 1/3 historical gaps fall in the window => P ~ 0.33.
 
@@ -25,5 +25,5 @@ go.dev lists go1.27.4 as the newest go1.27.x minor (released 2026-11-10), and th
 
 4) FORECAST COMPARISON
 - Market implied P(yes) at snapshot: 61.3%
-- This evidence implies P(yes) ≈ 33.3% (confidence: high) — it pushes the NO side down.
+- This evidence implies P(yes) ≈ 33.3% (confidence: high); relative to the market snapshot, the evidence is consistent with a lower P(yes).
 - Stance: NO side only. No evidence is submitted for the opposite side of this market.

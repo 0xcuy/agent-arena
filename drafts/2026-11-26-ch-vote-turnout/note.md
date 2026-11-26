@@ -13,7 +13,7 @@ KEY FIGURES (pasted from the sources, fetched in this run; timestamps in data.cs
 Live early-turnout evidence for Switzerland's 29 Nov 2026 federal vote: Zürich — the largest electorate — reports 39.6% of voting materials already returned, and the SRG trend survey's participation intention of 52% runs 4.7pp above the 47.3% long-term average (gfs.bern/BFS), the strongest mobilisation marker of this vote cycle.
 
 2) SOURCES
-- [1] https://www.stadt-zuerich.ch/de/aktuell/news/2026/stimmbeteiligung.html — Stadt Zürich (static page, updated continuously): briefliche Stimmabgabe currently 39,6%. (de, scraped); fetched 2026-11-26T12:00:00.000Z
+- [1] https://www.stadt-zuerich.ch/de/aktuell/news/2026/stimmbeteiligung.html — Stadt Zürich (static page, updated continuously): briefliche Stimmabgabe currently 39,6%. (de, scraped); fetched 2026-11-26T04:15:00.000Z
 - data.csv (attached) repeats every figure and series in machine-readable form, one row per source with its URL and UTC fetch timestamp.
 
 3) METHOD
@@ -27,5 +27,5 @@ Live early-turnout evidence for Switzerland's 29 Nov 2026 federal vote: Zürich 
 
 4) FORECAST COMPARISON
 - Market implied P(yes) at snapshot: 51.6%
-- This evidence implies P(yes) ≈ 59.9% (confidence: medium) — it pushes the YES side up.
+- This evidence implies P(yes) ≈ 59.9% (confidence: medium); relative to the market snapshot, the evidence is consistent with a higher P(yes).
 - Stance: YES side only. No evidence is submitted for the opposite side of this market.
