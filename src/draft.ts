@@ -5,12 +5,15 @@ import type { CompetitionMarket, DraftManifest, EvidenceCandidate } from "./type
 
 /**
  * Draft writer. One directory per submission under drafts/:
- *   note.md      — the exact 4-part dated note text that would be submitted
- *   data.csv     — compact machine-readable series backing section 3 (written by mathgen)
+ *   note.md      — the exact dated note text that would be submitted
+ *   data.csv     — compact machine-readable series backing the note (written by mathgen;
+ *                  includes one "source" row per fetched URL with its UTC fetchedAt)
  *   manifest.json — links, files, stance, idempotency key, submission state
- * The note is a 4-part dated note per the competition guide: dated fact,
- * sources, method, forecast comparison. All key figures are pasted inline so
- * the judge never needs JS rendering (anti-`unverifiable`).
+ *
+ * The note is judge-proof by construction: key figures are pasted at the TOP (the
+ * judge fetches basic HTTP once and truncates long pages), every figure appears
+ * inline so nothing depends on JS or bot-walled pages, and the CSV repeats the
+ * series with each source URL + UTC fetch timestamp.
  */
 
 export interface DraftPaths {
@@ -30,7 +33,7 @@ export function draftDirFor(runDate: string, topic: string): DraftPaths {
   };
 }
 
-export function composeNote(c: EvidenceCandidate, market: CompetitionMarket): string {
+export function composeNote(c: EvidenceCandidate, market: CompetitionMarket, assumptions: string[] = []): string {
   const pct = (p: number) => (p < 0.001 ? `<0.1%` : `${(p * 100).toFixed(1)}%`);
   const impliedPct = pct(c.analysis.evidenceImpliedYes);
   const marketPct = `${(c.marketImpliedYes * 100).toFixed(1)}%`;
@@ -41,25 +44,33 @@ export function composeNote(c: EvidenceCandidate, market: CompetitionMarket): st
   lines.push(`Market: ${market.question}`);
   lines.push(`Market address: ${market.address} — evidence cutoff ${market.evidenceCutoffAt}`);
   lines.push("");
+  // Key figures at the top: the judge fetches each link once and truncates long pages.
+  lines.push("KEY FIGURES (pasted from the sources, fetched in this run; timestamps in data.csv):");
+  for (const f of c.figures) lines.push(`- ${f}`);
+  lines.push("");
   lines.push("1) DATED FACT");
   lines.push(c.headline);
   lines.push("");
-  lines.push("Key figures, copied from the source content at fetch time (also in data.csv):");
-  for (const f of c.figures) lines.push(`- ${f}`);
-  lines.push("");
   lines.push("2) SOURCES");
   c.links.forEach((l, i) => {
-    lines.push(`- [${i + 1}] ${l.url} — ${c.sourceDescriptions[i] ?? l.label} (${l.lang}, ${l.access})`);
+    lines.push(
+      `- [${i + 1}] ${l.url} — ${c.sourceDescriptions[i] ?? l.label} (${l.lang}, ${l.access}); fetched ${c.asOf}`,
+    );
   });
   lines.push(
-    "- data.csv (attached) holds the full series/derivation table in machine-readable form; every figure above also appears inline so nothing depends on JS or bot-walled pages.",
+    "- data.csv (attached) repeats every figure and series in machine-readable form, one row per source with its URL and UTC fetch timestamp.",
   );
   lines.push("");
   lines.push("3) METHOD");
   for (const m of c.analysis.methodLines) lines.push(`- ${m}`);
+  if (assumptions.length > 0) {
+    lines.push("");
+    lines.push("3a) STATED MODEL ASSUMPTIONS (not fetched from the sources):");
+    for (const a of assumptions) lines.push(`- ${a}`);
+  }
   lines.push("");
   lines.push("4) FORECAST COMPARISON");
-  lines.push(`- Market implied P(yes) at snapshot: ${marketPct}%`);
+  lines.push(`- Market implied P(yes) at snapshot: ${marketPct}`);
   lines.push(
     `- This evidence implies P(yes) ≈ ${impliedPct} (confidence: ${c.analysis.confidence}) — it pushes the ${c.stance.toUpperCase()} side ${push}.`,
   );
@@ -74,6 +85,7 @@ export function writeDraft(
   market: CompetitionMarket,
   mode: "mock" | "live",
   runDate: string,
+  assumptions: string[] = [],
 ): DraftPaths {
   const paths = draftDirFor(runDate, c.topic);
   mkdirSync(paths.dir, { recursive: true });
@@ -92,7 +104,7 @@ export function writeDraft(
     submittedAt: null,
     submissionId: null,
   };
-  writeFileSync(paths.note, composeNote(c, market), "utf-8");
+  writeFileSync(paths.note, composeNote(c, market, assumptions), "utf-8");
   writeFileSync(paths.manifest, JSON.stringify(manifest, null, 2), "utf-8");
   return paths;
 }

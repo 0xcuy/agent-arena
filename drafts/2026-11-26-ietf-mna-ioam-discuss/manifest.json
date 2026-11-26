@@ -2,19 +2,18 @@
   "topic": "ietf-mna-ioam-discuss",
   "marketAddress": "0xda5d046f5bac4bbfa5abe32bc52787725548d4ee",
   "marketQuestion": "Will any IESG member record a DISCUSS on draft-ietf-mpls-mna-ioam in the IETF Datatracker by 2026-12-03 23:59 UTC?",
-  "generatedAt": "2026-11-26T03:08:06.897Z",
+  "generatedAt": "2026-11-26T04:09:03.828Z",
   "mode": "mock",
   "asOf": "2026-11-26T12:00:00.000Z",
   "stance": "yes",
   "links": [
-    "https://datatracker.ietf.org/doc/draft-ietf-mpls-mna-ioam/ballot/",
-    "https://datatracker.ietf.org/doc/draft-ietf-mpls-mna-ioam/"
+    "https://datatracker.ietf.org/doc/draft-ietf-mpls-mna-ioam/ballot/"
   ],
   "files": [
     "data.csv"
   ],
-  "factSignature": "b2fb29dc0e9442e66e01038fac765fa54be1ad932298d43f710a696e24f32d3a",
-  "idempotencyKey": "754e9944-5fd0-40db-adbf-303036f8afbd",
+  "factSignature": "91f39f1fa41737e274bd9451f1986dd87731d37a91dc8afde53fb54404741b68",
+  "idempotencyKey": "819176fa-ea66-4870-bf42-9d29e1efa549",
   "submittedAt": null,
   "submissionId": null
 }

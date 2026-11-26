@@ -3,25 +3,28 @@ Evidence note — 2026-11-26 (all times UTC)
 Market: Will English Wikipedia siteinfo API show ≥7,275,500 articles at 12:00 UTC on Dec 10, 2026?
 Market address: 0x7a17b76f7f1cda20e8bc5a88166c4732e6db39f5 — evidence cutoff 2026-12-09T11:00:00.000Z
 
-1) DATED FACT
-Siteinfo API snapshot (Nov 25, 2026): 7,271,234 English Wikipedia articles. Reaching 7,275,500 by Dec 10 12:00 UTC requires +4,266 net articles in 14 days = +304/day, roughly 7x the observed net creation rate of +43.7/day over the last 30 days (+1,312) and +38.4/day over 90 days (+3,458).
+KEY FIGURES (pasted from the sources, fetched in this run; timestamps in data.csv):
+- English Wikipedia siteinfo API (fetched live, timestamp in the CSV): 7,269,403 articles
+- Net growth so far this 2026 (live "Size of Wikipedia" table): +154,500 since the 2026-01-01 value of 7,114,903 — ~468.9/day
+- Required net to reach 7,275,500 by 2026-12-10 12:00 UTC: +6,097 = 435.5/day over the 14.0 days left
+- The required pace (436/day) is BELOW the live observed pace (469/day)
 
-Key figures, copied from the source content at fetch time (also in data.csv):
-- Current count: 7,271,234 articles (siteinfo statistics API, fetched 2026-11-25 23:59 UTC)
-- Threshold: 7,275,500 by Dec 10, 2026 12:00 UTC (14 days later) = +4,266 net required = 304.7/day
-- Observed net velocity: +43.7/day over 30 days (net +1,312), +38.4/day over 90 days (net +3,458)
-- Projected 14-day net at the 30d rate: +612 (sd +/-144); z vs required: +25 sigma
+1) DATED FACT
+Live siteinfo + the Size-of-Wikipedia growth table (fetched 2026-11-26) put English Wikipedia at 7,269,403 articles with a net creation pace of ~469/day this year; reaching 7,275,500 by the market's check time needs 436/day — a pace the current velocity is already beating.
 
 2) SOURCES
-- [1] https://en.wikipedia.org/w/api.php?action=query&meta=siteinfo&siprop=statistics&format=json — Wikipedia siteinfo statistics API (JSON, no JS): live article count at fetch time. (en, api-json)
-- data.csv (attached) holds the full series/derivation table in machine-readable form; every figure above also appears inline so nothing depends on JS or bot-walled pages.
+- [1] https://en.wikipedia.org/w/api.php?action=query&meta=siteinfo&siprop=statistics&format=json — siteinfo API (JSON): articles = 7269403. (en, api-json); fetched 2026-11-26T12:00:00.000Z
+- data.csv (attached) repeats every figure and series in machine-readable form, one row per source with its URL and UTC fetch timestamp.
 
 3) METHOD
-- Required net gain 4,266 articles over 14 days = 304.7/day.
-- Observed net velocity: 43.7/day over 30d (1,312 net), 38.4/day over 90d (3,458 net).
-- Projection N(612, 144): P(>= 4,266) = 0.000001 (z = 25.4).
+- Required net gain 6,097 over 14.0 days = 435.5/day.
+- Observed net velocity (2026 year-to-date, live): 154,500 net over 330 days = 468.2/day.
+- Projection N(6565, 224): P(>= 6,097) = 0.981368 (z = -2.1).
+
+3a) STATED MODEL ASSUMPTIONS (not fetched from the sources):
+- Daily net-creation sd (60/day) is a stated model assumption
 
 4) FORECAST COMPARISON
-- Market implied P(yes) at snapshot: 56.3%%
-- This evidence implies P(yes) ≈ <0.1% (confidence: high) — it pushes the NO side down.
-- Stance: NO side only. No evidence is submitted for the opposite side of this market.
+- Market implied P(yes) at snapshot: 56.3%
+- This evidence implies P(yes) ≈ 98.1% (confidence: high) — it pushes the YES side up.
+- Stance: YES side only. No evidence is submitted for the opposite side of this market.

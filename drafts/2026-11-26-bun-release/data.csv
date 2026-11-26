@@ -1,20 +1,21 @@
 tag,published_at,gap_days_to_next
-bun-v1.3.1,2026-06-02,18
-bun-v1.3.2,2026-06-20,11
-bun-v1.3.3,2026-07-01,14
-bun-v1.3.4,2026-07-15,14
-bun-v1.3.5,2026-07-29,12
-bun-v1.3.6,2026-08-10,12
-bun-v1.3.7,2026-08-22,13
-bun-v1.3.8,2026-09-04,13
-bun-v1.3.9,2026-09-17,11
-bun-v1.4.0,2026-09-28,14
-bun-v1.4.1,2026-10-12,10
-bun-v1.4.2,2026-10-22,10
-bun-v1.4.3,2026-11-01,12
-bun-v1.4.4,2026-11-13,11
-bun-v1.4.5,2026-11-24,
-last release before window,2026-11-24,
+bun-v1.3.6,2026-01-13,14
+bun-v1.3.7,2026-01-27,2
+bun-v1.3.8,2026-01-29,10
+bun-v1.3.9,2026-02-08,18
+bun-v1.3.10,2026-02-26,20
+bun-v1.3.11,2026-03-18,23
+bun-v1.3.12,2026-04-10,10
+bun-v1.3.13,2026-04-20,23
+bun-v1.3.14,2026-05-13,99
+bun-v1.4.0,2026-08-20,15
+bun-v1.4.1,2026-09-04,1
+bun-v1.4.2,2026-09-05,35
+bun-v1.4.3,2026-10-10,12
+bun-v1.4.4,2026-10-22,28
+bun-v1.4.5,2026-11-19,
+last release before window,2026-11-19,
 market window [2026-11-28..2026-12-11],,
-historical gaps landing inside window,13/14,
-"P(next release in window), empirical",0.929,
+historical gaps landing inside window,7/14,
+"P(next release in window), empirical",0.500,
+source,https://api.github.com/repos/oven-sh/bun/releases?per_page=15,2026-11-26T12:00:00.000Z

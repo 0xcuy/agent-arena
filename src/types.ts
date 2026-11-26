@@ -14,6 +14,8 @@ export interface CompetitionMarket {
   evidenceCutoffAt: string;
   pots: { judgement: string; settlement: string };
   resolutionCriteria: string;
+  /** Wave 2+ markets may carry official source URLs (Path A mining). */
+  dataSources?: { url: string; label?: string }[];
 }
 
 /** Mirrors the SDK EntryState (kept local so mock mode needs no API). */
@@ -51,7 +53,8 @@ export interface SubmissionRecord {
   markets: { marketAddress: string; bounty: { amount: string; state: string } | null }[];
 }
 
-/** Read-only client surface used by the pipeline. Same shape in mock and live mode. */
+/** Read-only client surface used by the pipeline. Same shape in mock and live mode.
+ *  acceptTerms is the single write action, exposed only for the explicit CLI step. */
 export interface DelphiApi {
   readonly mode: "mock" | "live";
   getLimits(): Promise<EvidenceLimits>;
@@ -59,6 +62,7 @@ export interface DelphiApi {
   getEntryState(marketAddress: string): Promise<EntryState>;
   listSubmissions(query: { market?: string }): Promise<SubmissionRecord[]>;
   listCompetitionMarkets(): Promise<CompetitionMarket[]>;
+  acceptTerms(version: string): Promise<{ version: string; acceptedAt: string }>;
 }
 
 /** Mining path per the build brief: 1 arithmetic, 2 machine-readable trackers, 3 non-English scraping. */
@@ -66,11 +70,15 @@ export type MiningPath = 1 | 2 | 3;
 
 export type AnalysisKind =
   | "cpi_base_effect"
+  | "cpi_required_mom"
   | "turnout_projection"
+  | "turnout_threshold"
   | "poll_margin_regression"
   | "dhondt_seats"
+  | "seat_threshold"
   | "ballot_flag_snapshot"
   | "markov_lead"
+  | "match_lead_elo"
   | "threshold_velocity"
   | "release_gap_cdf"
   | "blocker_clearance";
@@ -146,9 +154,19 @@ export interface EvidenceLogEntry {
   stance: "yes" | "no";
   factSignature: string;
   status: "drafted" | "rejected" | "submitted";
+  /** Mode tag: mock entries never block live runs and vice versa (fix 11). */
+  mode?: "mock" | "live";
   draftPath: string | null;
   submissionId: string | null;
   note: string;
+}
+
+export interface SubmitOutcomeFields {
+  verdict?: string;
+  reason?: string;
+  bounty?: string;
+  zeroPayReason?: string | null;
+  settlementUpTo?: string | null;
 }
 
 export interface DraftManifest {
@@ -162,10 +180,12 @@ export interface DraftManifest {
   links: string[];
   files: string[];
   factSignature: string;
-  /** Reserved for a live submit; reused verbatim on retry. */
+  /** Reserved for a live submit; logged BEFORE the POST and reused verbatim on retry. */
   idempotencyKey: string;
   submittedAt: string | null;
   submissionId: string | null;
+  /** Surfaces from the live submission verdict (written back by submitDraft). */
+  outcome?: SubmitOutcomeFields;
 }
 
 export interface RunReport {
@@ -179,6 +199,8 @@ export interface RunReport {
   draftsWritten: string[];
   duplicatesSkipped: string[];
   gateRejects: { topic: string; reasons: string[] }[];
+  /** Live/refresh mining failures (source down, parse failed, stale): the market is skipped, never guessed. */
+  miningFailures: { topic: string; reason: string }[];
   draftsSkippedNoSpec: { address: string; question: string; cutoff: string }[];
   feedbackDrafts: string[];
 }

@@ -1,14 +1,14 @@
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { AgentConfig } from "./config.js";
 import { createDelphiApi } from "./delphi/client.js";
-import { createFirecrawl } from "./firecrawl/client.js";
+import { createSources } from "./miners/live/sources.js";
+import { SEEDS_BY_MARKET, refreshSeed, LiveMiningError } from "./miners/live/refreshers.js";
 import { checkEligibility, rankMarkets } from "./filter.js";
 import { EvidenceLog } from "./evidence-log.js";
 import { gateCandidate } from "./gate.js";
-import { SPECS_BY_MARKET } from "./miners/specs.js";
-import { assembleCandidate, preSignature, runAnalysis, verifySources } from "./miners/mine.js";
-import { writeDraft } from "./draft.js";
+import { assembleCandidate, preSignature, runAnalysis, stagingCsvPath, verifySources } from "./miners/mine.js";
+import { composeNote, writeDraft } from "./draft.js";
 import { writeFeedbackDrafts } from "./feedback.js";
 import { MOCK_NOW } from "./delphi/fixtures.js";
 import type { CompetitionMarket, EvidenceLimits, EvidenceTerms, RunReport } from "./types.js";
@@ -24,8 +24,8 @@ export interface RunOptions {
 
 export async function runPipeline(cfg: AgentConfig, opts: RunOptions): Promise<RunReport> {
   const api = await createDelphiApi(cfg);
-  const firecrawl = createFirecrawl(cfg);
-  const log = new EvidenceLog(EVIDENCE_LOG_PATH);
+  const sourceApi = createSources(cfg);
+  const log = new EvidenceLog(EVIDENCE_LOG_PATH, cfg.mode);
 
   // 1. Limits: do we have submissions left this hour at all?
   const limits: EvidenceLimits = await api.getLimits();
@@ -37,16 +37,14 @@ export async function runPipeline(cfg: AgentConfig, opts: RunOptions): Promise<R
   const terms: EvidenceTerms = await api.getTerms();
   if (cfg.mode === "live" && !terms.acceptedAt) {
     throw new Error(
-      `terms not accepted (${terms.url}). Review, then POST /v1/terms/acceptance {"termsVersion": ${JSON.stringify(terms.version)}}.`,
+      `terms not accepted (${terms.url}). Review them, then run \`npm run accept-terms\` (never automatic inside a run).`,
     );
   }
 
   // 3. Markets + entry states, then filter and rank.
   const markets = await api.listCompetitionMarkets();
   const now = cfg.mode === "mock" ? new Date(MOCK_NOW) : new Date();
-  const pathByAddress = new Map(
-    [...SPECS_BY_MARKET.values()].map((s) => [s.marketAddress, s.miningPath] as const),
-  );
+  const pathByAddress = new Map([...SEEDS_BY_MARKET.values()].map((s) => [s.marketAddress, s.miningPath] as const));
   const skips: { address: string; question: string; reason: string }[] = [];
   const eligible: ReturnType<typeof checkEligibility>[] = [];
   for (const m of markets) {
@@ -57,9 +55,9 @@ export async function runPipeline(cfg: AgentConfig, opts: RunOptions): Promise<R
   }
   const ranked = rankMarkets(eligible, pathByAddress);
 
-  // Report every eligible market that has no research spec yet (extension point).
+  // Report every eligible market that has no research template yet (computed once; the loop must not re-add).
   const noSpecMarkets = ranked
-    .filter((r) => !SPECS_BY_MARKET.has(r.market.address))
+    .filter((r) => !SEEDS_BY_MARKET.has(r.market.address))
     .map((r) => ({
       address: r.market.address,
       question: r.market.question,
@@ -77,74 +75,139 @@ export async function runPipeline(cfg: AgentConfig, opts: RunOptions): Promise<R
     draftsWritten: [],
     duplicatesSkipped: [],
     gateRejects: [],
+    miningFailures: [],
     draftsSkippedNoSpec: noSpecMarkets,
     feedbackDrafts: [],
   };
 
   const runDate = (cfg.mode === "mock" ? MOCK_NOW : new Date().toISOString()).slice(0, 10);
-  const asOf = cfg.mode === "mock" ? MOCK_NOW : new Date().toISOString();
+  const asOf = now.toISOString();
+  // In-flight draft claims written by THIS run, PER MARKET: only these may be
+  // subtracted from remainingOnMarket, and only when batching several drafts
+  // for the same market (fix 6). One draft per market keeps every entry at 0.
+  const inFlightByMarket = new Map<string, number>();
 
   for (const { market, entry } of ranked) {
     if (report.draftsWritten.length >= opts.maxDrafts) break;
-    const spec = SPECS_BY_MARKET.get(market.address);
-    if (!spec) {
-      report.draftsSkippedNoSpec.push({
+    const seed = SEEDS_BY_MARKET.get(market.address);
+    if (!seed) continue; // already listed in draftsSkippedNoSpec (assigned once above)
+
+    // 4. Online-submissions check BEFORE mining (a market already at the account
+    //    cap must not cost sources, analysis or API budget).
+    let onlineCount = 0;
+    try {
+      onlineCount = (await api.listSubmissions({ market: market.address })).length;
+    } catch (err) {
+      report.gateRejects.push({ topic: seed.topic, reasons: [`online submissions check failed: ${(err as Error).message}`] });
+      continue;
+    }
+    const cap = entry.restricted ? 1 : 3;
+    if (onlineCount >= cap) {
+      report.marketSkips.push({
         address: market.address,
         question: market.question,
-        cutoff: market.evidenceCutoffAt,
+        reason: `online submissions already at account cap (${onlineCount}/${cap}) before mining`,
       });
       continue;
     }
 
-    // Dedupe before any expensive work — repeats earn nothing.
-    if (log.hasSignature(preSignature(spec))) {
-      report.duplicatesSkipped.push(spec.topic);
-      continue;
-    }
-    // Per-market cap: 3 submissions (1 if restricted) — enforce locally.
-    const cap = entry.restricted ? 1 : 3;
+    // 5. Per-market cap on the local ledger (mode-tagged: mock entries never count here in live mode).
     const used = log.draftedCount(market.address);
     if (used >= cap) {
       report.marketSkips.push({
         address: market.address,
         question: market.question,
-        reason: `local log already drafted ${used}/${cap} for this market`,
+        reason: `local log already drafted ${used}/${cap} for this market (mode=${cfg.mode})`,
       });
       continue;
     }
 
-    // Anti-`unverifiable`: scraped sources must still contain the pasted figures.
-    const verify = await verifySources(spec, firecrawl);
+    // 6. LIVE MINE: refresh the spec from HTTP-200 fetches made in THIS run.
+    //    Frozen numbers are never used; a mining failure skips the market.
+    let refreshed;
+    try {
+      refreshed = await refreshSeed(seed, sourceApi, { now, live: cfg.mode === "live" });
+    } catch (err) {
+      report.miningFailures.push({
+        topic: seed.topic,
+        reason: err instanceof LiveMiningError ? err.message : `live mining failed: ${(err as Error).message}`,
+      });
+      continue;
+    }
+    const spec = refreshed.spec;
+
+    // 7. Dedupe before any expensive work — repeats earn nothing.
+    if (log.hasSignature(preSignature(spec))) {
+      report.duplicatesSkipped.push(spec.topic);
+      continue;
+    }
+    const locked = log.lockedStance(market.address);
+
+    // 8. Anti-`unverifiable`: EVERY link (scraped, static-html, api-json) must still
+    //    contain what the note pastes, and every figure must appear in the content.
+    //    The docs already fetched by the refresher (this same run) are reused rather
+    //    than re-fetched, so all model inputs are cross-checked, not just the shipped link.
+    const verify = await verifySources(spec, sourceApi, spec.figures, {
+      live: cfg.mode === "live",
+      now,
+      docs: new Map(refreshed.docs.map((d) => [d.url, d])),
+    });
     if (!verify.ok) {
       report.gateRejects.push({
         topic: spec.topic,
-        reasons: verify.failures.map((f) => `unverifiable at ${f.url}: missing ${f.missing.join(", ")}`),
+        reasons: verify.failures.map((f) => `unverifiable at ${f.url}: ${f.missing.join(", ")}`),
+      });
+      continue;
+    }
+    if (locked !== null) {
+      // Cheap lookahead: stance-lock contradiction is visible pre-analysis; skip.
+      report.gateRejects.push({
+        topic: spec.topic,
+        reasons: [`stance lock: market already covered with ${locked.toUpperCase()} stance`],
       });
       continue;
     }
 
     report.candidatesMined += 1;
 
-    // 5. Analysis via the local Python math/CSV generator.
+    // 9. Analysis via the local Python math/CSV generator (models: assumptions stated in the note).
     mkdirSync(STAGING_DIR, { recursive: true });
-    const csvPath = join(STAGING_DIR, `${spec.topic}-data.csv`);
-    const analysis = runAnalysis(spec, csvPath, asOf);
+    const csvPath = stagingCsvPath(spec.topic);
+    const sourceMeta = refreshed.docs.map((d) => ({ url: d.url, fetchedAt: d.fetchedAt }));
+    const analysis = runAnalysis(spec, csvPath, asOf, sourceMeta);
     const candidate = assembleCandidate(spec, market, analysis, asOf);
 
-    // 6. Strict pre-submit gate.
-    const online = await api.listSubmissions({ market: market.address });
-    const verdict = gateCandidate(candidate, { market, entry, log, onlineSubmissionCount: online.length });
+    // 10. Strict pre-submit gate on the exact note + attachment that would ship.
+    const note = composeNote(candidate, market, refreshed.assumptions);
+    let csvBytes = 0;
+    try {
+      csvBytes = statSync(csvPath).size;
+    } catch {
+      csvBytes = 0;
+    }
+    const fetchTimes = [...verify.docs.values()].map((d) => d.fetchedAt);
+    const verdict = gateCandidate(candidate, {
+      market,
+      entry,
+      log,
+      note,
+      fileSizes: [csvBytes],
+      sourceFetchTimes: fetchTimes,
+      now,
+      inFlightClaims: inFlightByMarket.get(market.address) ?? 0,
+    });
     if (!verdict.pass) {
       report.gateRejects.push({ topic: spec.topic, reasons: verdict.reasons });
       continue;
     }
 
-    // 7. Draft: note + CSV + manifest under drafts/<date>-<topic>/.
-    const draft = writeDraft(candidate, market, cfg.mode, runDate);
+    // 11. Draft: note + CSV + manifest under drafts/<date>-<topic>/.
+    const draft = writeDraft(candidate, market, cfg.mode, runDate, refreshed.assumptions);
     writeFileSync(draft.csv, readFileSync(csvPath, "utf-8"), "utf-8");
     report.draftsWritten.push(draft.dir);
+    inFlightByMarket.set(market.address, (inFlightByMarket.get(market.address) ?? 0) + 1);
 
-    // 8. Ledger: stance lock + dedupe apply from now on.
+    // 12. Ledger (mode-tagged): stance lock + dedupe apply from now on.
     log.append({
       ts: new Date().toISOString(),
       marketAddress: market.address,
@@ -158,7 +221,7 @@ export async function runPipeline(cfg: AgentConfig, opts: RunOptions): Promise<R
     });
   }
 
-  // 9. Feedback drafts ($250 bounty pool): record friction observed this run.
+  // 13. Feedback drafts ($250 bounty pool): record friction observed this run.
   report.feedbackDrafts = writeFeedbackDrafts(report, process.env.DELPHI_WALLET);
 
   rmSync(STAGING_DIR, { recursive: true, force: true });
@@ -171,9 +234,7 @@ export async function planPipeline(cfg: AgentConfig): Promise<RunReport> {
   const api = await createDelphiApi(cfg);
   const markets = await api.listCompetitionMarkets();
   const now = cfg.mode === "mock" ? new Date(MOCK_NOW) : new Date();
-  const pathByAddress = new Map(
-    [...SPECS_BY_MARKET.values()].map((s) => [s.marketAddress, s.miningPath] as const),
-  );
+  const pathByAddress = new Map([...SEEDS_BY_MARKET.values()].map((s) => [s.marketAddress, s.miningPath] as const));
   const skips: { address: string; question: string; reason: string }[] = [];
   const eligible: ReturnType<typeof checkEligibility>[] = [];
   for (const m of markets) {
@@ -194,8 +255,9 @@ export async function planPipeline(cfg: AgentConfig): Promise<RunReport> {
     draftsWritten: [],
     duplicatesSkipped: [],
     gateRejects: [],
+    miningFailures: [],
     draftsSkippedNoSpec: ranked
-      .filter((r) => !SPECS_BY_MARKET.has(r.market.address))
+      .filter((r) => !SEEDS_BY_MARKET.has(r.market.address))
       .map((r) => ({
         address: r.market.address,
         question: r.market.question,

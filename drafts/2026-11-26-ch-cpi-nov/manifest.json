@@ -2,19 +2,18 @@
   "topic": "ch-cpi-nov",
   "marketAddress": "0xecace7b63b2e044dd339e7512cf4360713a8e156",
   "marketQuestion": "Will Swiss FSO report Nov 2026 CPI YoY inflation ≥1.6% in its Dec 2 release?",
-  "generatedAt": "2026-11-26T03:08:06.826Z",
+  "generatedAt": "2026-11-26T04:09:03.759Z",
   "mode": "mock",
   "asOf": "2026-11-26T12:00:00.000Z",
   "stance": "yes",
   "links": [
-    "https://www.bfs.admin.ch/bfs/de/home/statistiken/preise/kpi.html",
-    "https://www.bfs.admin.ch/bfs/de/home/statistiken/preise/mietpreise.html"
+    "https://www.admin.ch/de/newnsb/UA8hylpLYO6i"
   ],
   "files": [
     "data.csv"
   ],
-  "factSignature": "f675c25d0cd96529daa0a79239683c7c7edbf4defd6f54369404d916e94b28e9",
-  "idempotencyKey": "367c7e86-3c1d-4c16-bad3-2121bb242a7b",
+  "factSignature": "6d19cbc4b9649ca737ac0e9f3860cdd8d98a11517e7ec3ef345e7e2024c5b5fa",
+  "idempotencyKey": "5f45f225-4781-4f34-8dc3-20040b573e44",
   "submittedAt": null,
   "submissionId": null
 }

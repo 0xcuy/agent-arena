@@ -2,19 +2,18 @@
   "topic": "ch-vote-turnout",
   "marketAddress": "0x94dbba7c9b44b788a701602ab6d919ff7b7fc38a",
   "marketQuestion": "Will turnout in Switzerland's federal vote of Nov 29, 2026 be at least 50.0%, per the Federal Chancellery?",
-  "generatedAt": "2026-11-26T03:08:07.214Z",
+  "generatedAt": "2026-11-26T04:09:04.198Z",
   "mode": "mock",
   "asOf": "2026-11-26T12:00:00.000Z",
   "stance": "yes",
   "links": [
-    "https://www.bk.admin.ch/ch/de/aktuell/abstimmungen/postvoting-2026-11-26",
-    "https://www.bk.admin.ch/ch/fr/actualite/votations/postvoting-2026-11-26"
+    "https://www.stadt-zuerich.ch/de/aktuell/news/2026/stimmbeteiligung.html"
   ],
   "files": [
     "data.csv"
   ],
-  "factSignature": "7a53d90e43f88e9cd470b8ae79b1d459dc5b8f51d9bd25e15570c69cb1adb4c7",
-  "idempotencyKey": "9f58cbb7-b378-40d1-85da-1554e254ba34",
+  "factSignature": "7e96d725f1f155316441c6f02605fba4adf912f2bb4adc107ee4dcba6240fe21",
+  "idempotencyKey": "c4973a8d-aad4-4173-8431-14dc3da4686c",
   "submittedAt": null,
   "submissionId": null
 }

@@ -1,6 +1,9 @@
-metric,value
-similar MPLS-area drafts (3 yr) with >=2 open directorate issues at writeup,12
-"of those, recorded >=1 DISCUSS before approval",9
-current draft directorate blocking issues,4
-ballot not opened as of snapshot (writeup pending),6 days to cutoff
-historical probability writeup clears + ballot opens within,0.550
+row_type,metric,value
+scenario,doc,draft-ietf-mpls-mna-ioam-18
+live,positions recorded (live),1
+scenario,IESG positions total,14
+live,needed to pass (live),9
+live,DISCUSS count (live),0
+assumption,comparable drafts with >=1 DISCUSS (assumption),9/12
+scenario,P(any DISCUSS by cutoff),0.696
+source,https://datatracker.ietf.org/doc/draft-ietf-mpls-mna-ioam/ballot/,2026-11-26T12:00:00.000Z

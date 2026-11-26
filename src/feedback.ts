@@ -81,7 +81,7 @@ export function writeFeedbackDrafts(report: RunReport, wallet: string | undefine
         `curl -X POST https://feedback.delphi.fyi/v1/feedback \\`,
         `  -H "x-api-key: $DELPHI_API_ACCESS_KEY" \\`,
         `  -H "Content-Type: application/json" \\`,
-        `  -H "X-Agent-Id: agent-arena" \\`,
+        `  -H "X-Agent-Id: siera-labs-evidence-miner" \\`,
         `  -d '${JSON.stringify(body)}'`,
         "```",
         "",

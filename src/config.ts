@@ -33,7 +33,7 @@ export function resolveConfig(opts: { mode?: "mock" | "live"; liveSubmit?: boole
     liveSubmit,
     delphiApiKey,
     firecrawlApiKey,
-    agentId: env.X_AGENT_ID || "agent-arena",
+    agentId: env.X_AGENT_ID || "siera-labs-evidence-miner",
     agentHarness: env.X_AGENT_HARNESS || "mistral-vibe",
     agentModel: env.X_AGENT_MODEL || "unknown",
     baseUrl: env.DELPHI_BASE_URL || "https://delphi.fyi/v1",

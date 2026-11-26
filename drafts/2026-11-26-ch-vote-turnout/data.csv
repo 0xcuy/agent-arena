@@ -1,8 +1,8 @@
-row_type,vote,return_T8_pct,final_turnout_pct,ols_fit_pct,residual
-history,2026-02-08,35.6,50.2,49.2,1.0
-history,2026-05-17,34.9,46.9,48.3,-1.4
-history,2025-09-28,34.1,47.8,47.4,0.4
-history,2024-11-24,33.6,46.6,46.8,-0.2
-history,2025-05-18,32.2,45.1,45.1,-0.0
-history,2025-01-19,31.0,43.9,43.7,0.2
-current,federal vote 2026-11-29,37.2,51.0,51.0,
+row_type,item,value_pct
+live,Stadt Zürich postal return,39.6
+live,participation intention (gfs.bern 2nd SRG trend survey),52.0
+live,long-term average participation intention,47.3
+scenario,expected final turnout (stated offset),50.5
+scenario,P(final >= 50),0.599
+source,https://www.stadt-zuerich.ch/de/aktuell/news/2026/stimmbeteiligung.html,2026-11-26T12:00:00.000Z
+source,https://www.gfsbern.ch/de/news/2-srg-trendumfrage-zur-eidg-abstimmung-vom-29-november-2026/,2026-11-26T12:00:00.000Z

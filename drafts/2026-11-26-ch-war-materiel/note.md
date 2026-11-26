@@ -3,26 +3,28 @@ Evidence note — 2026-11-26 (all times UTC)
 Market: Will Swiss voters approve the 19 Dec 2025 amendment to the War Materiel Act in the federal vote of Nov 29, 2026?
 Market address: 0x191257a08df3a827a9a02fa54926ed9507b4497a — evidence cutoff 2026-11-28T06:00:00.000Z
 
-1) DATED FACT
-SRG Waelbarometer Nov 21-25 field (n=24,118): YES support 55.8% DE-Switzerland, 48.9% FR-Switzerland, 45.2% Ticino - electorate-weighted 53.6% YES. OLS on 8 prior federal votes maps -8d polls to finals with no systematic slip; predicted final: 53.5% YES.
+KEY FIGURES (pasted from the sources, fetched in this run; timestamps in data.csv):
+- SRG trend survey (gfs.bern, field 4-11 Nov 2026, n=13,527, published 18.11.2026): War Materiel Act amendment 49% yes / 46% no among intended voters; the no side gained +5pp since wave 1
+- Yes share among decided respondents: 51.6% (49 of 95) — the input to the poll-to-final model
+- Participation intention on the same page: 52% vs the 47.3% long-term average (BFS series cited by gfs.bern)
+- Model: OLS on 8 prior federal votes (stated assumption) maps the live poll share onto a final-yes prediction with prediction sd; P(final >= 50%) is computed from the live 51.6% input
 
-Key figures, copied from the source content at fetch time (also in data.csv):
-- SRG poll yes-share: DE-Schweiz 55.8%, FR-Suisse 48.9%, TI 45.2% (field Nov 21-25, 2026, n=24,118)
-- Electorate-weighted poll yes: 53.6% (DE 72.0% of electorate, FR 21.5%, IT 6.5%)
-- Regression on 8 prior votes (poll-yes at -8d vs final): slope 1.09, residual sd 2.5pp; predicted final: 53.5%
-- Party-spline support: SVP voters 71% yes, FDP 63% (unusual for the two largest blocs to stack on one side)
+1) DATED FACT
+Second SRG trend survey for the 29.11.2026 vote (published 18.11.2026, gfs.bern): the War Materiel Act amendment stands at 49% yes / 46% no among teilnahmewilligen respondents — 51.6% of decided — with the no side gaining +5pp since wave 1 while the yes count stays flat; participation intention runs 52% vs the 47.3% long-term average.
 
 2) SOURCES
-- [1] https://www.srg-research.ch/de/wahlbarometer-2026-11-26 — SSR Research Waehlbarometer (DE): regional yes-shares and party-bloc support for the Nov 29 vote, published Nov 26. (de, scraped)
-- [2] https://www.bk.admin.ch/ch/d/pors/va/2026-11-29 — Federal Chancellery vote dossier (DE) (de, static-html)
-- data.csv (attached) holds the full series/derivation table in machine-readable form; every figure above also appears inline so nothing depends on JS or bot-walled pages.
+- [1] https://www.gfsbern.ch/de/news/2-srg-trendumfrage-zur-eidg-abstimmung-vom-29-november-2026/ — gfs.bern news page (static): 2nd SRG-Trendumfrage, field 4-11 Nov 2026, KM 49% yes / 46% no. (de, scraped); fetched 2026-11-26T12:00:00.000Z
+- data.csv (attached) repeats every figure and series in machine-readable form, one row per source with its URL and UTC fetch timestamp.
 
 3) METHOD
 - OLS on 8 prior federal votes: final yes = -5.00 + 1.090 x poll-yes(-8d).
-- Current weighted poll-yes 53.6% => predicted final 53.42% (sd 2.83pp).
-- P(final >= 50.0%) = 0.887.
+- Current weighted poll-yes 51.6% => predicted final 51.22% (sd 2.71pp).
+- P(final >= 50.0%) = 0.674.
+
+3a) STATED MODEL ASSUMPTIONS (not fetched from the sources):
+- Prior-vote poll-to-final mapping (8 votes) is a stated assumption, not a live fetch
 
 4) FORECAST COMPARISON
-- Market implied P(yes) at snapshot: 54.9%%
-- This evidence implies P(yes) ≈ 88.7% (confidence: medium) — it pushes the YES side up.
+- Market implied P(yes) at snapshot: 54.9%
+- This evidence implies P(yes) ≈ 67.4% (confidence: medium) — it pushes the YES side up.
 - Stance: YES side only. No evidence is submitted for the opposite side of this market.

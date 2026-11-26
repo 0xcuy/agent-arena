@@ -1,5 +1,5 @@
 {
-  "runTs": "2026-11-26T03:08:06.674Z",
+  "runTs": "2026-11-26T04:09:04.788Z",
   "mode": "mock",
   "marketsSeen": 27,
   "marketsEligible": 23,
@@ -634,21 +634,22 @@
       "reason": "odds 77% outside 30-70% band"
     }
   ],
-  "candidatesMined": 10,
-  "draftsWritten": [
-    "drafts/2026-11-26-de-cpi-nov",
-    "drafts/2026-11-26-ch-cpi-nov",
-    "drafts/2026-11-26-ietf-mna-ioam-discuss",
-    "drafts/2026-11-26-fide-game8",
-    "drafts/2026-11-26-go-1-27-5",
-    "drafts/2026-11-26-wikipedia-articles",
-    "drafts/2026-11-26-bun-release",
-    "drafts/2026-11-26-ch-vote-turnout",
-    "drafts/2026-11-26-ch-war-materiel",
-    "drafts/2026-11-26-es-vox-seats"
+  "candidatesMined": 0,
+  "draftsWritten": [],
+  "duplicatesSkipped": [
+    "de-cpi-nov",
+    "ch-cpi-nov",
+    "ietf-mna-ioam-discuss",
+    "fide-game8",
+    "go-1-27-5",
+    "wikipedia-articles",
+    "bun-release",
+    "ch-vote-turnout",
+    "ch-war-materiel",
+    "es-vox-seats"
   ],
-  "duplicatesSkipped": [],
   "gateRejects": [],
+  "miningFailures": [],
   "draftsSkippedNoSpec": [
     {
       "address": "0x48c2f4d761be00f8d9342a7de34d54673c506631",

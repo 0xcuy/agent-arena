@@ -11,6 +11,9 @@ export function mockDelphiApi(): DelphiApi {
     getEntryState: async (address: string) => mockEntryState(address),
     listSubmissions: async (q: { market?: string }) => mockSubmissions(q.market),
     listCompetitionMarkets: async () => loadFixtureMarkets(),
+    acceptTerms: async () => {
+      throw new Error("terms acceptance is a live-only explicit action; mock mode never accepts anything");
+    },
   };
 }
 
@@ -51,6 +54,10 @@ export async function createDelphiApi(cfg: AgentConfig): Promise<DelphiApi> {
       const res = await fetch(cfg.marketsUrl);
       if (!res.ok) throw new Error(`markets.json fetch failed: ${res.status}`);
       return (await res.json()) as CompetitionMarket[];
+    },
+    acceptTerms: async (version: string) => {
+      const { data } = await client.acceptTerms(version);
+      return { version: data.version, acceptedAt: data.acceptedAt };
     },
   };
 }

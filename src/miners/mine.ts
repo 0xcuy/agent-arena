@@ -2,15 +2,19 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { AnalysisResult, CompetitionMarket, EvidenceCandidate, ResearchSpec } from "../types.js";
-import type { FirecrawlApi } from "../firecrawl/client.js";
+import type { AnalysisResult, CompetitionMarket, EvidenceCandidate, ResearchSpec, SourceLink } from "../types.js";
 import { factSignature } from "../evidence-log.js";
-import { MOCK_NOW } from "../delphi/fixtures.js";
+import type { SourceApi, SourceDoc } from "./live/sources.js";
 
 const MATHGEN = fileURLToPath(new URL("../../python/mathgen.py", import.meta.url));
 
 /** Run python/mathgen.py for one analysis; returns stats + the CSV path written. */
-export function runAnalysis(spec: ResearchSpec, csvPath: string, now: string): AnalysisResult {
+export function runAnalysis(
+  spec: ResearchSpec,
+  csvPath: string,
+  now: string,
+  sourceMeta: { url: string; fetchedAt: string }[] = [],
+): AnalysisResult {
   mkdirSync(dirname(csvPath), { recursive: true });
   const specPath = csvPath.replace(/\.csv$/, ".spec.json");
   writeFileSync(
@@ -18,7 +22,7 @@ export function runAnalysis(spec: ResearchSpec, csvPath: string, now: string): A
     JSON.stringify({
       kind: spec.analysis.kind,
       params: spec.analysis.params,
-      meta: { topic: spec.topic, market: spec.marketAddress, asOf: now },
+      meta: { topic: spec.topic, market: spec.marketAddress, asOf: now, sources: sourceMeta },
     }),
     "utf-8",
   );
@@ -35,35 +39,86 @@ export function runAnalysis(spec: ResearchSpec, csvPath: string, now: string): A
 
 export interface VerifyOutcome {
   ok: boolean;
+  /** url -> the doc fetched during THIS verification run. */
+  docs: Map<string, SourceDoc>;
   failures: { url: string; missing: string[] }[];
   warnings: string[];
 }
 
-/** Anti-`unverifiable`: every scraped link's content must still contain the
- *  figures we paste into the note. The judge fetches cited URLs with no JS,
- *  so claims must be present in static/markdown content. */
-export async function verifySources(spec: ResearchSpec, firecrawl: FirecrawlApi): Promise<VerifyOutcome> {
+/**
+ * Anti-`unverifiable` verification for EVERY link (scraped, static-html AND
+ * api-json — the latter used to ship on trust, fix 10), plus the note-figure
+ * cross-check (fix 9): each figure pasted into the note must have at least one
+ * of its numeric tokens present in the actual fetched source content
+ * (decimal comma vs dot normalized), otherwise a figure typo slips through.
+ * Docs already fetched in this run (by the refresher) are reused instead of
+ * re-fetched, so figures that came from a second source are cross-checked too.
+ */
+export async function verifySources(
+  spec: ResearchSpec,
+  sources: SourceApi,
+  noteFigures: string[],
+  opts?: { live?: boolean; now?: Date; docs?: Map<string, SourceDoc> },
+): Promise<VerifyOutcome> {
   const failures: { url: string; missing: string[] }[] = [];
   const warnings: string[] = [];
+  const docs = new Map<string, SourceDoc>(opts?.docs ?? []);
+
+  const fetchDoc = async (link: SourceLink): Promise<SourceDoc> => {
+    const cached = docs.get(link.url);
+    if (cached) return cached;
+    const doc = await sources.fetch(link.url);
+    docs.set(link.url, doc);
+    return doc;
+  };
+
   for (const link of spec.links) {
-    if (link.access === "static-html" || !link.expect || link.expect.length === 0) continue;
-    let markdown = "";
+    let doc: SourceDoc;
     try {
-      markdown = (await firecrawl.scrape(link.url)).markdown;
+      doc = await fetchDoc(link);
     } catch (err) {
-      failures.push({ url: link.url, missing: [`scrape failed: ${(err as Error).message}`] });
+      failures.push({ url: link.url, missing: [`fetch failed: ${(err as Error).message}`] });
       continue;
     }
-    if (markdown.trim() === "") {
-      // Mock fixtures cover every scraped URL; an empty scrape means the fixture
-      // or the live source is unreadable -> treat as unverifiable.
+    if (doc.status !== 200) {
+      failures.push({ url: link.url, missing: [`HTTP ${doc.status} (200 required)`] });
+      continue;
+    }
+    if (!link.expect || link.expect.length === 0) continue;
+    const content = doc.json !== undefined ? JSON.stringify(doc.json) : doc.body;
+    if (content.trim() === "") {
       failures.push({ url: link.url, missing: ["source content empty"] });
       continue;
     }
-    const missing = link.expect.filter((needle) => !markdown.includes(needle));
+    const missing = link.expect.filter((needle) => !content.includes(needle));
     if (missing.length > 0) failures.push({ url: link.url, missing });
   }
-  return { ok: failures.length === 0, failures, warnings };
+
+  // Note-figure cross-check: at least one numeric token of each figure line must
+  // appear in the fetched content (comma/period decimals normalized both ways).
+  const allContent = [...docs.values()].map((d) => (d.json !== undefined ? JSON.stringify(d.json) : d.body)).join("\n");
+  const norm = (s: string) => s.replace(/(\d),(?=\d{3}\b)/g, "$1").replace(/(\d),(\d)/g, "$1.$2");
+  const contentNorm = norm(allContent).replace(/,/g, "");
+  for (const [i, figure] of noteFigures.entries()) {
+    const tokens = (figure.match(/\d+([.,]\d+)?/g) ?? []).map((t) => norm(t));
+    if (tokens.length === 0) continue; // free-text figure (e.g. a statement, no number)
+    if (!tokens.some((t) => contentNorm.includes(t.replace(/,/g, "")))) {
+      failures.push({
+        url: spec.links[0]?.url ?? "(candidate)",
+        missing: [`figure #${i + 1} not found in fetched source content: "${figure.slice(0, 80)}"`],
+      });
+    }
+  }
+
+  if (opts?.live && spec.links.length > 0) {
+    const cutoff = opts.now ?? new Date();
+    for (const [url, doc] of docs) {
+      const age = cutoff.getTime() - new Date(doc.fetchedAt).getTime();
+      if (age > 2 * 60 * 60 * 1000) warnings.push(`source ${url} fetched_at is older than 2h (${doc.fetchedAt})`);
+    }
+  }
+
+  return { ok: failures.length === 0, docs, failures, warnings };
 }
 
 /** Assemble the evidence-implied stance + signature into a candidate. */
@@ -97,4 +152,7 @@ export function preSignature(spec: ResearchSpec): string {
   return factSignature(spec.marketAddress, spec.headline, spec.figures);
 }
 
-export const MOCK_AS_OF = MOCK_NOW;
+/** Staging CSV path helper shared with the pipeline. */
+export function stagingCsvPath(topic: string): string {
+  return join("staging", `${topic}-data.csv`);
+}

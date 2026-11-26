@@ -12,7 +12,8 @@
     "live": "tsx src/cli.ts run --mode=live",
     "plan": "tsx src/cli.ts plan",
     "test": "tsx --test src/test/*.test.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "accept-terms": "tsx src/cli.ts accept-terms --mode=live"
   },
   "dependencies": {
     "@gensyn-ai/gensyn-delphi-sdk": "^2.4.1"

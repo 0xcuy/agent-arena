@@ -1,12 +1,13 @@
-metric,value
-current article count (siteinfo snapshot),7271234
-threshold,7275500
-required net gain,4266
-days remaining to evaluation,14
-required net per day,304.7
-"observed net per day, last 30d",43.7
-"observed net per day, last 90d",38.4
-daily net sd (30d series),38.4
-projected net over remaining days,612
-projection sd,144
-P(net >= required),0.000001
+row_type,metric,value
+live,current count (live snapshot),7269403
+live,threshold,7275500
+live,required net gain,6097
+scenario,days remaining to evaluation,14.00
+scenario,required net per day,435.5
+live,"observed net per day (2026 year-to-date, live)",468.2
+scenario,daily net sd (stated assumption),60.0
+scenario,projected net over remaining days,6565
+scenario,projection sd,224
+scenario,P(net >= required),0.981368
+source,https://en.wikipedia.org/w/api.php?action=query&meta=siteinfo&siprop=statistics&format=json,2026-11-26T12:00:00.000Z
+source,https://en.wikipedia.org/wiki/Wikipedia:Size_of_Wikipedia,2026-11-26T12:00:00.000Z

@@ -1,4 +1,11 @@
-game_index,leader_color,win_prob,draw_prob,loss_prob
-1,White,0.300,0.550,0.150
-lead before game 8,,,0.5,
-P(leader strictly ahead after listed games),,,,0.850
+row_type,item,value
+live,Sindarov score,1.0
+live,Gukesh score,1.0
+live,Sindarov Elo,2780
+live,Gukesh Elo,2712
+model,Elo expected score,0.5966
+model,per-game win/draw/loss for Sindarov,0.222/0.750/0.028
+scenario,games remaining to market evaluation,6
+scenario,P(Sindarov strictly ahead),0.711
+source,https://www.fide.com/new-documents/,2026-11-26T12:00:00.000Z
+source,https://worldchess.com/watch/fide-world-chess-championship-2026,2026-11-26T12:00:00.000Z

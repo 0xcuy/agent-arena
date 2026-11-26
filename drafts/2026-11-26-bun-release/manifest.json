@@ -2,18 +2,18 @@
   "topic": "bun-release",
   "marketAddress": "0x921e39354e4bfc18251ad1b1c80eec1a3940ab82",
   "marketQuestion": "Will oven-sh/bun publish a GitHub release tagged bun-v1.4.6 or later between Nov 28 and Dec 11, 2026 (UTC)?",
-  "generatedAt": "2026-11-26T03:08:07.149Z",
+  "generatedAt": "2026-11-26T04:09:04.133Z",
   "mode": "mock",
   "asOf": "2026-11-26T12:00:00.000Z",
-  "stance": "yes",
+  "stance": "no",
   "links": [
     "https://api.github.com/repos/oven-sh/bun/releases?per_page=15"
   ],
   "files": [
     "data.csv"
   ],
-  "factSignature": "6898db3ddd33c23b237e67a0306aa2ab9397e280b3ec0fa794017f92de69345c",
-  "idempotencyKey": "7b9a7105-72e5-4298-bcf9-88d9c8985c84",
+  "factSignature": "6398cfed2068332d5f57e65215274ff398daed6f00542cd633ebc4bc3bf3d4a9",
+  "idempotencyKey": "9d9f719e-2454-4854-833b-59def2920dbb",
   "submittedAt": null,
   "submissionId": null
 }
