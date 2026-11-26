@@ -1,0 +1,4 @@
+game_index,leader_color,win_prob,draw_prob,loss_prob
+1,White,0.300,0.550,0.150
+lead before game 8,,,0.5,
+P(leader strictly ahead after listed games),,,,0.850

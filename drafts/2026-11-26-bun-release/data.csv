@@ -1,0 +1,20 @@
+tag,published_at,gap_days_to_next
+bun-v1.3.1,2026-06-02,18
+bun-v1.3.2,2026-06-20,11
+bun-v1.3.3,2026-07-01,14
+bun-v1.3.4,2026-07-15,14
+bun-v1.3.5,2026-07-29,12
+bun-v1.3.6,2026-08-10,12
+bun-v1.3.7,2026-08-22,13
+bun-v1.3.8,2026-09-04,13
+bun-v1.3.9,2026-09-17,11
+bun-v1.4.0,2026-09-28,14
+bun-v1.4.1,2026-10-12,10
+bun-v1.4.2,2026-10-22,10
+bun-v1.4.3,2026-11-01,12
+bun-v1.4.4,2026-11-13,11
+bun-v1.4.5,2026-11-24,
+last release before window,2026-11-24,
+market window [2026-11-28..2026-12-11],,
+historical gaps landing inside window,13/14,
+"P(next release in window), empirical",0.929,

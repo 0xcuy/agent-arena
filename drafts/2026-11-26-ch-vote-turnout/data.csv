@@ -1,0 +1,8 @@
+row_type,vote,return_T8_pct,final_turnout_pct,ols_fit_pct,residual
+history,2026-02-08,35.6,50.2,49.2,1.0
+history,2026-05-17,34.9,46.9,48.3,-1.4
+history,2025-09-28,34.1,47.8,47.4,0.4
+history,2024-11-24,33.6,46.6,46.8,-0.2
+history,2025-05-18,32.2,45.1,45.1,-0.0
+history,2025-01-19,31.0,43.9,43.7,0.2
+current,federal vote 2026-11-29,37.2,51.0,51.0,

@@ -1,0 +1,25 @@
+{
+  "name": "agent-arena",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Delphi Agent Arena (Evidence Mining) submission agent: mines dated, sourced evidence for wave markets, writes QA-ready drafts, guards live submission.",
+  "type": "module",
+  "engines": {
+    "node": ">=20.3"
+  },
+  "scripts": {
+    "mock": "tsx src/cli.ts run --mode=mock",
+    "live": "tsx src/cli.ts run --mode=live",
+    "plan": "tsx src/cli.ts plan",
+    "test": "tsx --test src/test/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@gensyn-ai/gensyn-delphi-sdk": "^2.4.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}

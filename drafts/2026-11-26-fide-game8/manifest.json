@@ -1,0 +1,19 @@
+{
+  "topic": "fide-game8",
+  "marketAddress": "0x42fdc3fb099766fd01289f215cd399146e1f224e",
+  "marketQuestion": "After Game 8 (Dec 3, 2026), will Sindarov have strictly more points than Gukesh in the 2026 FIDE World Championship?",
+  "generatedAt": "2026-11-26T03:08:06.960Z",
+  "mode": "mock",
+  "asOf": "2026-11-26T12:00:00.000Z",
+  "stance": "yes",
+  "links": [
+    "https://worldchampionship2026.fide.com/en/match/score/"
+  ],
+  "files": [
+    "data.csv"
+  ],
+  "factSignature": "646623e2ecb7af252e9fdc30b21a27aea06df9031ddc1d1d790e23a35fe88362",
+  "idempotencyKey": "e63eb273-9527-44ee-8376-35c1bb269b36",
+  "submittedAt": null,
+  "submissionId": null
+}

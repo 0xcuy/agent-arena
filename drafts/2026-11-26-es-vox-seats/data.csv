@@ -1,0 +1,15 @@
+district,seats,party_vote_shares_used,Vox_seats_allocated
+Madrid,37,"{""PP"": 32.5, ""PSOE"": 27.0, ""Vox"": 15.5, ""Sumar"": 12.0, ""otros"": 13.0}",6
+Barcelona,32,"{""PP"": 12.0, ""PSOE"": 25.5, ""Vox"": 9.0, ""Sumar"": 15.5, ""otros"": 38.0}",3
+Valencia,16,"{""PP"": 34.5, ""PSOE"": 28.5, ""Vox"": 17.5, ""Sumar"": 11.5, ""otros"": 8.0}",3
+Sevilla,12,"{""PP"": 43.0, ""PSOE"": 33.0, ""Vox"": 13.5, ""Sumar"": 6.5, ""otros"": 4.0}",2
+Malaga,11,"{""PP"": 44.5, ""PSOE"": 31.5, ""Vox"": 14.0, ""Sumar"": 5.5, ""otros"": 4.5}",1
+Alicante,11,"{""PP"": 39.0, ""PSOE"": 28.5, ""Vox"": 17.0, ""Sumar"": 8.5, ""otros"": 7.0}",2
+Murcia,10,"{""PP"": 44.0, ""PSOE"": 27.5, ""Vox"": 18.5, ""Sumar"": 4.5, ""otros"": 5.5}",2
+La Coruna,8,"{""PP"": 38.0, ""PSOE"": 30.5, ""Vox"": 12.0, ""Sumar"": 9.5, ""otros"": 10.0}",1
+Cadiz,9,"{""PP"": 42.0, ""PSOE"": 33.5, ""Vox"": 14.5, ""Sumar"": 5.0, ""otros"": 5.0}",1
+Bizkaia,9,"{""PP"": 12.0, ""PSOE"": 26.0, ""Vox"": 8.5, ""Sumar"": 12.0, ""otros"": 41.5}",0
+Zaragoza,7,"{""PP"": 38.5, ""PSOE"": 29.0, ""Vox"": 15.0, ""Sumar"": 9.5, ""otros"": 8.0}",1
+Pontevedra,7,"{""PP"": 40.0, ""PSOE"": 29.5, ""Vox"": 12.5, ""Sumar"": 8.5, ""otros"": 9.5}",1
+"remainder (44 smaller provinces, poll-vendor provincial estimates)",181,range 24-38,31.0
+TOTAL projected,350,,54.0

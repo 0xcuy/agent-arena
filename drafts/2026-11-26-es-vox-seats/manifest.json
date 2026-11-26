@@ -1,0 +1,20 @@
+{
+  "topic": "es-vox-seats",
+  "marketAddress": "0x55b0fabfcdf6125415854cc193ecd8cdc75bc382",
+  "marketQuestion": "Will Vox win ≥60 of 350 Congress seats in Spain's Nov 29, 2026 general election, per Interior Ministry provisional results?",
+  "generatedAt": "2026-11-26T03:08:07.336Z",
+  "mode": "mock",
+  "asOf": "2026-11-26T12:00:00.000Z",
+  "stance": "no",
+  "links": [
+    "https://www.electografia.es/sondeos-general-26n/2026-11-25",
+    "https://www.congreso.es/opendata/diputados-loi"
+  ],
+  "files": [
+    "data.csv"
+  ],
+  "factSignature": "6788a9dbc904cd5a9287360a7b666593074c056ff4b25007ae7abe4010a0aac8",
+  "idempotencyKey": "4308d7c3-e771-4dbb-8181-e2bfaf408b4c",
+  "submittedAt": null,
+  "submissionId": null
+}
