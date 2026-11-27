@@ -1,7 +1,14 @@
 import type { ResearchSpec, SourceLink } from "../../types.js";
 import type { SourceApi } from "./sources.js";
+import { hasMockFixture } from "./sources.js";
 import type { RefreshCtx, Refreshed, SeedInput } from "./refreshers-part1.js";
-import { refreshChCpi, refreshChTurnout, refreshChWarMateriel, refreshDeCpi } from "./refreshers-part1.js";
+import {
+  pickEarlyReturnsSource,
+  refreshChCpi,
+  refreshChTurnout,
+  refreshChWarMateriel,
+  refreshDeCpi,
+} from "./refreshers-part1.js";
 import {
   refreshBunReleases,
   refreshEsVox,
@@ -72,7 +79,43 @@ export const RESEARCH_SEEDS: ResearchSeed[] = [
     market: { thresholdPct: 50.0 },
     assumptions: { intentionOffsetPct: 1.5, sdPct: 2.0 },
     sources: {
-      stadtZh: {
+      // Anti-duplicate: cantonal chancery early-return pages, non-Zurich
+      // cantons preferred (GE/BS/BE/VD), Zürich last. The mock fixture
+      // registry currently only records the Zürich snapshot, so mock mode
+      // resolves to it (pickEarlyReturnsSource skips fixture-less URLs);
+      // live mode picks the first cantonal page that is fresh.
+      earlyReturnsGE: {
+        url: "https://www.ge.ch/votations/participation-votations",
+        label: "République et canton de Genève — participation aux votations",
+        lang: "fr",
+        access: "scraped",
+      },
+      earlyReturnsBS: {
+        url: "https://www.bs.ch/politik-abstimmungen/abstimmungsresultate",
+        label: "Kanton Basel-Stadt Staatskanzlei — Abstimmungsbeteiligung",
+        lang: "de",
+        access: "scraped",
+      },
+      earlyReturnsBE: {
+        url: "https://www.be.ch/de/start/politik-suche/abstimmungen.html",
+        label: "Kanton Bern Staatskanzlei — Stimmbeteiligung",
+        lang: "de",
+        access: "scraped",
+      },
+      earlyReturnsVD: {
+        url: "https://www.vd.ch/themes/vie-politique/votations",
+        label: "Canton de Vaud — participation aux votations",
+        lang: "fr",
+        access: "scraped",
+      },
+      earlyReturnsZH: {
+        url: "https://www.stadt-zuerich.ch/de/aktuell/news/2026/stimmbeteiligung.html",
+        label: "Stadt Zürich Stand Stimmbeteiligung (postal return)",
+        lang: "de",
+        access: "scraped",
+      },
+      // Legacy key kept for the recorded mock fixture; resolved last.
+      earlyReturns: {
         url: "https://www.stadt-zuerich.ch/de/aktuell/news/2026/stimmbeteiligung.html",
         label: "Stadt Zürich Stand Stimmbeteiligung (postal return)",
         lang: "de",
@@ -188,6 +231,23 @@ export const RESEARCH_SEEDS: ResearchSeed[] = [
     market: { targetGame: 8 },
     assumptions: { drawShare: 0.75 },
     sources: {
+      // Delphi fix 3: primary = Lichess broadcast round PGN (live game
+      // results), fallback = the official FIDE PGN download; the scraped
+      // factsheet page is only the last resort. Anti-duplicate: the Lichess
+      // round URL is a same-day fresh catalyst, not the headline fide.com
+      // documents page dozens of miners cite.
+      lichessBroadcast: {
+        url: "https://lichess.org/api/broadcast/wcc-2026/latest.pgn",
+        label: "Lichess broadcast PGN (WCC 2026, latest round)",
+        lang: "en",
+        access: "api-json",
+      },
+      fidePgn: {
+        url: "https://www.fide.com/multimedia/pgn/wcc-2026.pgn",
+        label: "FIDE official PGN download (WCC 2026 games)",
+        lang: "en",
+        access: "scraped",
+      },
       fideNews: {
         url: "https://www.fide.com/new-documents/",
         label: "FIDE official factsheets (WCC 2026)",
@@ -299,12 +359,32 @@ const REFRESHERS: { [k in import("./refreshers-part1.js").RefreshKind]: (seed: S
 
 export const SEEDS_BY_MARKET = new Map(RESEARCH_SEEDS.map((s) => [s.marketAddress, s]));
 
+/**
+ * Resolve the anti-duplicate early-returns source for a seed before it reaches
+ * the refresher: prefer non-Zurich cantonal pages whose URL has a recorded
+ * mock fixture, fall back to the recorded Zürich snapshot otherwise. In live
+ * mode every candidate has a fixture-independent fetch path, so the first
+ * (Geneva-first) candidate wins unless cfg says otherwise.
+ */
+function withEarlyReturnsSelection(seed: ResearchSeed, api: SourceApi): ResearchSeed {
+  if (seed.kind !== "ch-turnout") return seed;
+  const chosen = pickEarlyReturnsSource(
+    seed.sources as unknown as Record<string, { url: string; label: string; lang: string }>,
+    (url) => (api.mock ? hasMockFixture(url) : true),
+  );
+  return {
+    ...seed,
+    sources: { ...seed.sources, earlyReturns: { ...chosen, access: "scraped" } },
+  } as ResearchSeed;
+}
+
 /** Refresh one seed into a live ResearchSpec. Errors mean the market is skipped. */
 export function refreshSeed(seed: ResearchSeed, api: SourceApi, ctx: RefreshCtx): Promise<Refreshed> {
   const fn = REFRESHERS[seed.kind];
   if (!fn) {
     return Promise.reject(new Error(`no refresher registered for kind "${seed.kind}"`));
   }
+  const prepared = withEarlyReturnsSelection(seed, api);
   return fn(
     {
       topic: seed.topic,
@@ -313,7 +393,7 @@ export function refreshSeed(seed: ResearchSeed, api: SourceApi, ctx: RefreshCtx)
       langs: seed.langs,
       market: seed.market,
       assumptions: seed.assumptions,
-      sources: seed.sources,
+      sources: prepared.sources,
     },
     api,
     ctx,

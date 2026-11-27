@@ -26,6 +26,38 @@ export interface SourceApi {
   fetch(url: string, kind?: "json" | "text"): Promise<SourceDoc>;
 }
 
+/** SourceApi with a test seam: reroute fetches (e.g. to an in-memory server). */
+export interface OverrideSourceApi extends SourceApi {
+  readonly underlying: SourceApi;
+  setNext(doc: SourceDoc | Error): void;
+}
+
+/**
+ * Wrap a SourceApi so every fetch can be observed or replaced. The refresher
+ * code path (fresh() / refreshSeed) is exercised unchanged; tests capture the
+ * requested URL and stub the response.
+ */
+export function withFetchOverride(
+  underlying: SourceApi,
+  impl: (url: string, fallback: () => Promise<SourceDoc>) => Promise<SourceDoc>,
+): OverrideSourceApi {
+  const calls: string[] = [];
+  const api: OverrideSourceApi = {
+    mock: underlying.mock,
+    underlying,
+    setNext(doc: SourceDoc | Error) {
+      next = doc;
+    },
+    fetch(url) {
+      calls.push(url);
+      return impl(url, () => underlying.fetch(url));
+    },
+  };
+  let next: SourceDoc | Error | undefined;
+  Object.defineProperty(api, "calls", { get: () => calls });
+  return api;
+}
+
 export const FETCH_STALENESS_MS = 2 * 60 * 60 * 1000; // 2 hours
 
 const FIXTURES_PATH = fileURLToPath(new URL("./fixtures.json", import.meta.url));
@@ -62,6 +94,11 @@ export function htmlToText(html: string): string {
 }
 
 const UA = "siera-labs-evidence-miner/1.0 (+https://delphi.fyi)";
+
+/** True when mock mode has a recorded fixture for this URL (never fetches). */
+export function hasMockFixture(url: string): boolean {
+  return LIVE_FIXTURES[url] !== undefined;
+}
 
 export function createSources(cfg: AgentConfig): SourceApi {
   if (cfg.mode === "mock") {

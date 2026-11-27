@@ -2,7 +2,9 @@ import type { SourceLink } from "../../types.js";
 import type { RefreshCtx, Refreshed, SeedInput } from "./refreshers-part1.js";
 import { assemble, dot, fresh, grp, LiveMiningError, requireNum, rx } from "./refreshers-part1.js";
 import type { SourceApi, SourceDoc } from "./sources.js";
-import { assertFresh } from "./sources.js";
+import { assertFresh, hasMockFixture } from "./sources.js";
+import { fetchGithubApi, githubOk } from "./github.js";
+import { cleanMarkdown, parseEuropeanNumber, parsePgnResults, pgnResultToScores, runningScore, type PgnGameResult } from "./markdown.js";
 
 /** Path 3: Spain Vox seats — live Electografía/Data10 tracking page. */
 export async function refreshEsVox(seed: SeedInput, api: SourceApi, ctx: RefreshCtx): Promise<Refreshed> {
@@ -128,23 +130,50 @@ export async function refreshIetfBallot(seed: SeedInput, api: SourceApi, ctx: Re
 
 /** Path 2: FIDE WCC 2026 match — official factsheet + embedded ratings. */
 export async function refreshFideMatch(seed: SeedInput, api: SourceApi, ctx: RefreshCtx): Promise<Refreshed> {
-  const [fideDoc, ratingsDoc] = await Promise.all([
-    fresh(api, seed.sources.fideNews, "fideNews", ctx),
-    fresh(api, seed.sources.worldchess, "worldchess", ctx),
-  ]);
-  const fide = fideDoc.body;
-  const scoreM = rx(fide, /Match score: (\d+)[–-](\d+)/, "match score");
-  const scoreA = requireNum(grp(scoreM, 1, "Sindarov score"), "Sindarov score");
-  const scoreB = requireNum(grp(scoreM, 2, "Gukesh score"), "Gukesh score");
-  const gameM = rx(fide, /FACT SHEET – Game (\d+)/, "factsheet game number");
-  const gamesPlayed = requireNum(grp(gameM, 1, "games played"), "games played");
-  // The factsheet reads "White: <name> Black: <name> Result:" on one scraped
-  // line; each name capture is bounded by the NEXT label so the table artifact
-  // ("Gukesh Dommaraju Black / Javokhir Sindarov Result") cannot leak in.
-  const whiteM = rx(fide, /FACT SHEET – Game \d+[\s\S]*?White: ([A-Za-zÉé]+(?:\s[A-Za-zÉé]+)*?)\s+Black:/, "White player");
-  const whiteName = grp(whiteM, 1, "White player").trim();
-  const blackM = rx(fide, /FACT SHEET – Game \d+[\s\S]*?Black: ([A-Za-zÉé]+(?:\s[A-Za-zÉé]+)*?)\s+Result:/, "Black player");
-  const blackName = grp(blackM, 1, "Black player").trim();
+  const targetGame = Number(seed.market.targetGame ?? 8);
+  const drawShare = Number(seed.assumptions.drawShare);
+
+  // Delphi fix 3: game results come from the Lichess broadcast PGN (live
+  // move-level, available while the game runs and frozen per round), with the
+  // official FIDE PGN / factsheet as the after-the-game fallback. The old
+  // factsheet-only scrape could not deliver finished-game data on the live
+  // run (the scraped page carried no completed-game RESULT block).
+  // Candidate sources are tried in order; in mock mode a URL with no recorded
+  // fixture is skipped (mock fetch would hard-fail, never invent content).
+  let resultSource: "lichess-broadcast" | "fide-pgn" | "fide-factsheet" = "lichess-broadcast";
+  let games: PgnGameResult[];
+  let resultDoc: SourceDoc;
+  let broadcastDoc: SourceDoc | undefined;
+  let factsheetGamesPlayed: number | undefined;
+  try {
+    broadcastDoc = await tryFresh(api, seed.sources.lichessBroadcast, ctx);
+    games = parsePgnResults(broadcastDoc.body, "Sindarov");
+    if (games.length === 0) throw new LiveMiningError("lichess broadcast PGN parsed to zero games");
+    resultDoc = broadcastDoc;
+  } catch {
+    try {
+      const pgnDoc = await tryFresh(api, seed.sources.fidePgn, ctx);
+      games = parsePgnResults(pgnDoc.body, "Sindarov");
+      if (games.length === 0) throw new LiveMiningError("fide PGN parsed to zero games");
+      resultSource = "fide-pgn";
+      resultDoc = pgnDoc;
+    } catch {
+      const fideDoc = await fresh(api, seed.sources.fideNews, "fideNews", ctx);
+      games = parseFactsheetBlock(fideDoc.body, "Sindarov");
+      if (games.length === 0) {
+        throw new LiveMiningError("no finished-game results from lichess broadcast, fide PGN or factsheet");
+      }
+      // The factsheet carries only the LATEST game's block; the running count
+      // comes from its heading ("FACT SHEET – Game 2").
+      const sheetNo = grp(rx(fideDoc.body, /FACT SHEET\s*[–-]\s*Game\s+(\d+)/, "factsheet game number"), 1, "factsheet game number");
+      factsheetGamesPlayed = Number(sheetNo);
+      resultSource = "fide-factsheet";
+      resultDoc = fideDoc;
+    }
+  }
+
+  // Ratings stay on the World Chess event metadata.
+  const ratingsDoc = await fresh(api, seed.sources.worldchess, "worldchess", ctx);
   const ratingA = requireNum(
     grp(rx(ratingsDoc.body, /shortName\\?"?:?\\?"?Sindarov[^}]{0,120}rating\\?"?:(\d{4})/, "Sindarov rating"), 1, "Sindarov rating"),
     "Sindarov rating",
@@ -153,40 +182,87 @@ export async function refreshFideMatch(seed: SeedInput, api: SourceApi, ctx: Ref
     grp(rx(ratingsDoc.body, /shortName\\?"?:?\\?"?Gukesh[^}]{0,120}rating\\?"?:(\d{4})/, "Gukesh rating"), 1, "Gukesh rating"),
     "Gukesh rating",
   );
+  return finishFideMatch(seed, ctx, games, resultSource, resultDoc, ratingsDoc, {
+    ratingA,
+    ratingB,
+    targetGame,
+    drawShare,
+    factsheetGamesPlayed,
+  });
+}
 
-  const targetGame = Number(seed.market.targetGame ?? 8);
-  const gamesRemaining = Math.max(targetGame - gamesPlayed, 0);
-  const drawShare = Number(seed.assumptions.drawShare);
+/** fresh() that tolerates unregistered mock fixtures (returns null instead of throwing). */
+async function tryFresh(api: SourceApi, src: { url: string } | undefined, ctx: RefreshCtx): Promise<SourceDoc> {
+  if (!src) throw new LiveMiningError("source not configured");
+  if (api.mock && !hasMockFixture(src.url)) {
+    throw new LiveMiningError(`no mock fixture for ${src.url} — skipping to the next candidate source`);
+  }
+  return fresh(api, src as SeedInput["sources"][keyof SeedInput["sources"]], "candidate", ctx);
+}
+
+/** Shared tail of the fide miner: figures/headline/links/assemble. */
+function finishFideMatch(
+  seed: SeedInput,
+  ctx: RefreshCtx,
+  games: PgnGameResult[],
+  resultSource: "lichess-broadcast" | "fide-pgn" | "fide-factsheet",
+  resultDoc: SourceDoc,
+  ratingsDoc: SourceDoc,
+  opts: { ratingA: number; ratingB: number; targetGame: number; drawShare: number; factsheetGamesPlayed?: number },
+): Refreshed {
+  const last = games[games.length - 1]!;
+  const gamesPlayed = opts.factsheetGamesPlayed ?? games.length;
+  // The factsheet states the official running score ("Match score: 1–1",
+  // halves allowed); PGN sources have no such line, so sum the parsed games.
+  const scoreLine = resultSource === "fide-factsheet"
+    ? cleanMarkdown(resultDoc.body).match(/Match score:\s*([\d.,]+)\s*[–-]\s*([\d.,]+)/)
+    : undefined;
+  const scoreA = scoreLine ? parseEuropeanNumber(scoreLine[1]!) ?? runningScore(games).scoreA : runningScore(games).scoreA;
+  const scoreB = scoreLine ? parseEuropeanNumber(scoreLine[2]!) ?? runningScore(games).scoreB : runningScore(games).scoreB;
+  const gamesRemaining = Math.max(opts.targetGame - gamesPlayed, 0);
+  // Figures use the plain-hyphen convention ("½-½"); the factsheet scrape
+  // yields an en dash, so normalize it here.
+  const resultWord = last.result.replace(/1\/2/g, "½").replace(/[–—]/g, "-");
+  const resultLabel =
+    resultSource === "lichess-broadcast" ? "Lichess broadcast PGN"
+    : resultSource === "fide-pgn" ? "official FIDE PGN"
+    : "FIDE factsheet";
+  const sourceUrl =
+    resultSource === "lichess-broadcast" ? seed.sources.lichessBroadcast?.url ?? resultDoc.url
+    : resultSource === "fide-pgn" ? seed.sources.fidePgn?.url ?? resultDoc.url
+    : resultDoc.url;
 
   const figures = [
-    `FIDE official factsheet (fide.com/new-documents, fetched ${ctx.now.toISOString().slice(0, 10)}): game ${gamesPlayed} ended ½-½; match score ${scoreA}-${scoreB} (White: ${whiteName}, Black: ${blackName})`,
-    `Elo ratings of the two players (worldchess.com event metadata, live pages): Sindarov ${ratingA} (UZB) vs Gukesh ${ratingB} (IND) — a ${ratingA - ratingB} Elo gap`,
+    `${resultLabel} (fetched ${ctx.now.toISOString().slice(0, 10)}): game ${gamesPlayed} ended ${resultWord}; match score ${scoreA}-${scoreB} (White: ${last.white}, Black: ${last.black})`,
+    `Elo ratings of the two players (worldchess.com event metadata, live pages): Sindarov ${opts.ratingA} (UZB) vs Gukesh ${opts.ratingB} (IND) — a ${opts.ratingA - opts.ratingB} Elo gap`,
     `Color allocation in the match so far: Sindarov held White in games 1 and 3 (stated in the factsheet's game-3 preview: "white pieces for the second time in the match tomorrow")`,
-    `Model: exact enumeration of the ${gamesRemaining} remaining games (to the market's after-game-${targetGame} evaluation) with per-game W/D/L derived from the live Elo gap and a stated ${(drawShare * 100).toFixed(0)}% draw-share assumption, color-averaged`,
+    `Model: exact enumeration of the ${gamesRemaining} remaining games (to the market's after-game-${opts.targetGame} evaluation) with per-game W/D/L derived from the live Elo gap and a stated ${(opts.drawShare * 100).toFixed(0)}% draw-share assumption, color-averaged`,
   ];
   const headline =
-    `After game ${gamesPlayed} of the FIDE World Chess Championship 2026 the official match score is ${scoreA}-${scoreB} (both games drawn), and the challenger Sindarov — rated ${ratingA} vs Gukesh's ${ratingB} — ` +
-    `faces a ${gamesRemaining}-game stretch before the market's after-game-${targetGame} evaluation point; an exact enumeration of Elo-implied outcomes puts him strictly ahead with the probability computed in the attached CSV.`;
+    `After game ${gamesPlayed} of the FIDE World Chess Championship 2026 the official match score is ${scoreA}-${scoreB} (both games drawn), and the challenger Sindarov — rated ${opts.ratingA} vs Gukesh's ${opts.ratingB} — ` +
+    `faces a ${gamesRemaining}-game stretch before the market's after-game-${opts.targetGame} evaluation point; an exact enumeration of Elo-implied outcomes puts him strictly ahead with the probability computed in the attached CSV.`;
 
-  // One link ships (item budget); the ratings source URL + fetch time stay pasted
-  // in the note and the CSV source rows.
   const links: SourceLink[] = [
     {
-      url: fideDoc.url,
-      label: "FIDE official documents page: WCC 2026 game factsheets (result, colors, match score)",
+      url: sourceUrl,
+      label: resultSource === "fide-factsheet"
+        ? "FIDE official documents page: WCC 2026 game factsheets (result, colors, match score)"
+        : resultSource === "fide-pgn"
+          ? "FIDE official PGN download: WCC 2026 games (RESULT tags)"
+          : "Lichess broadcast: WCC 2026 games (per-round PGN, RESULT tags)",
       lang: "en",
-      access: "scraped",
-      expect: [`Match score: ${scoreA}`, "½"],
+      access: resultSource === "fide-factsheet" ? "scraped" : "api-json",
+      expect: resultSource === "fide-factsheet" ? ["½"] : [`[Result "${last.result}"]`],
     },
   ];
   return assemble(
     seed,
-    [fideDoc, ratingsDoc],
+    [resultDoc, ratingsDoc],
     headline,
     figures,
     [
-      `fide.com/new-documents (static): FACT SHEET Game ${gamesPlayed} — White ${whiteName}, Black ${blackName}, result ½-½, match score ${scoreA}-${scoreB}.`,
-      `worldchess.com event page ${ratingsDoc.url} (static, fetched in this run): embedded player metadata — Sindarov rated ${ratingA}, Gukesh rated ${ratingB}; URL + fetch time also in data.csv source rows.`,
+      `${resultLabel} (fetched in this run): ${gamesPlayed} games parsed, last result ${resultWord}, running score ${scoreA}-${scoreB}.`,
+      `worldchess.com event page ${ratingsDoc.url} (static, fetched in this run): embedded player metadata — Sindarov rated ${opts.ratingA}, Gukesh rated ${opts.ratingB}; URL + fetch time also in data.csv source rows.`,
     ],
     links,
     {
@@ -196,18 +272,35 @@ export async function refreshFideMatch(seed: SeedInput, api: SourceApi, ctx: Ref
         nameB: "Gukesh",
         scoreA,
         scoreB,
-        eloA: ratingA,
-        eloB: ratingB,
+        eloA: opts.ratingA,
+        eloB: opts.ratingB,
         gamesRemaining,
-        drawShare,
-        scoreSource: "fide.com/new-documents factsheet",
+        drawShare: opts.drawShare,
+        scoreSource: resultLabel,
         eloSource: "worldchess.com event metadata",
       },
     },
     [
-      `Draw-share assumption (${(drawShare * 100).toFixed(0)}%, color-averaged) is a stated model input, not a fetched figure`,
+      `Draw-share assumption (${(opts.drawShare * 100).toFixed(0)}%, color-averaged) is a stated model input, not a fetched figure`,
     ],
   );
+}
+
+/** Last-resort parser: the scraped FIDE factsheet's "White: … Black: … Result: ½–½" block. */
+function parseFactsheetBlock(body: string, playerA: string): PgnGameResult[] {
+  const cleaned = cleanMarkdown(body);
+  const m = cleaned.match(
+    /White:\s*([A-Za-zÉé.\- ]+?)\s+Black:\s*([A-Za-zÉé.\- ]+?)\s+Result:\s*([^\sA-Za-z]+)/,
+  );
+  if (!m) return [];
+  const white = m[1]!.trim();
+  const black = m[2]!.trim();
+  const result = m[3]!.replace(/\s/g, "");
+  const scores = pgnResultToScores(result);
+  if (!scores) return [];
+  const [w, b] = scores;
+  const aIsWhite = white.toLowerCase().includes(playerA.toLowerCase());
+  return [{ white, black, result, scoreA: aIsWhite ? w : b, scoreB: aIsWhite ? b : w }];
 }
 
 /** Path 2: English Wikipedia article count — siteinfo + Size-of-Wikipedia table. */
@@ -307,7 +400,8 @@ export async function releasesGapCdf(
     filterTags?: (rows: { tag: string; published: string }[]) => { tag: string; published: string }[];
   },
 ): Promise<Refreshed> {
-  const [relDoc] = await Promise.all([fresh(api, seed.sources[opts.sourceKey], opts.sourceKey, ctx)]);
+  const [relDoc] = await Promise.all([fetchGithubApi(seed.sources[opts.sourceKey]!.url, api)]);
+  githubOk(relDoc, ctx.live, ctx.now);
   const raw = relDoc.json as unknown;
   if (!Array.isArray(raw)) throw new LiveMiningError(`${opts.kindLabel} endpoint did not return a JSON array`);
   const rows = (raw as Record<string, string>[])
@@ -386,9 +480,10 @@ export async function refreshGoRelease(seed: SeedInput, api: SourceApi, ctx: Ref
   let milestone: { number: number; title: string; open_issues: number; closed_issues: number } | undefined;
   for (let page = 1; page <= 10 && !milestone; page++) {
     const url = String(seed.market.milestonesUrl).replace("{page}", String(page));
-    const doc = await api.fetch(url);
-    if (ctx.live) assertFresh(doc, ctx.now);
-    if (doc.status !== 200) throw new LiveMiningError(`milestone search page ${page} returned HTTP ${doc.status}`);
+    // DIRECT api.github.com call (never Firecrawl): the routed request came
+    // back HTTP 415 and killed the go miner on the 26 Nov run.
+    const doc = await fetchGithubApi(url, api);
+    githubOk(doc, ctx.live, ctx.now);
     const arr = doc.json as { number: number; title: string; open_issues: number; closed_issues: number }[];
     if (!Array.isArray(arr) || arr.length === 0) break;
     milestone = arr.find((m) => m.title === wantedTitle);
