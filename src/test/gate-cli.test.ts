@@ -80,12 +80,12 @@ test("NIT 5: 'derzeit' turnout regex requires adjacent %/Prozent + turnout wordi
 
 /* ---------------- NIT 4: fetch-time canton cascade ---------------- */
 
-test("NIT 4: turnout cascade tries Geneva first, then Basel-Stadt, then Bern — first canton that parses wins", async () => {
+test("NIT 4: turnout cascade tries Geneva first, then Basel-Stadt, then Zürich — first canton that parses wins (round-3 B2: Bern/Vaud dropped)", async () => {
   const seed = RESEARCH_SEEDS.find((s) => s.topic === "ch-vote-turnout")!;
   const fetched: string[] = [];
   const geBody = "La participation aux votations est actuellement de 30,3 % des suffrages.";
   const bsBody = "Die Stimmbeteiligung beträgt derzeit 39,27 % (briefliche Stimmabgaben).";
-  const beBody = "Die Stimmbeteiligung beträgt derzeit 41,1 % (briefliche Stimmabgaben).";
+  const zhBody = "Die Stimmbeteiligung beträgt derzeit 44,9 % (eingelaufene Stimmzettel).";
   const gfsBody = "Die Teilnahmeabsicht liegt unverändert bei 52 %. Der langjährigen Durchschnitt von 46,5 % wird übertroffen.";
   const api: SourceApi = {
     mock: false,
@@ -95,7 +95,7 @@ test("NIT 4: turnout cascade tries Geneva first, then Basel-Stadt, then Bern —
         url.includes("gfsbern") ? gfsBody
         : url.includes("ge.ch") ? (fetched.filter((u) => u.includes("ge.ch")).length === 1 ? new Error("HTTP 503") as unknown as string : geBody)
         : url.includes("bs.ch") ? bsBody
-        : url.includes("bern.ch") ? beBody
+        : url.includes("stadt-zuerich.ch") ? zhBody
         : new Error(`unexpected ${url}`) as unknown as string;
       if (typeof body !== "string") throw body;
       return { url, body, fetchedAt: CTX.now.toISOString(), status: 200, mock: false };
@@ -108,7 +108,8 @@ test("NIT 4: turnout cascade tries Geneva first, then Basel-Stadt, then Bern —
   assert.ok(fetched.filter((u) => u.includes("ge.ch")).length === 1, "Geneva is not retried after its failure");
   assert.ok(fetched.some((u) => u.includes("bs.ch")), "Basel-Stadt is next in the cascade");
   assert.match(figs, /Basel-Stadt[^|]*39\.3%/, JSON.stringify(figs));
-  assert.ok(!figs.includes("41.1"), "cascade must stop at the first parsing canton (Bern never wins)");
+  assert.ok(!fetched.some((u) => u.includes("stadt-zuerich.ch")), "cascade must stop at the first parsing canton (Zürich is only a last resort)");
+  assert.ok(!figs.includes("44.9"), "Zürich's figure must never win while Basel-Stadt parses");
 });
 
 /* ---------------- NIT 8: parsePgnResults game-boundary splitting ---------------- */
@@ -137,18 +138,34 @@ test("NIT 8: a game without a Result tag is skipped, not bound to the next game'
 
 /* ---------------- NIT 6: strengthen the ch-turnout picker test ---------------- */
 
-test("NIT 6: the turnout picker's shipped source is a live cantonal chancery page, Zürich only as last resort", () => {
+test("NIT 6: the turnout picker's shipped sources are LIVE cantonal pages verified by HTTP GET (round-3 B2), Zürich only as last resort", () => {
   const seed = RESEARCH_SEEDS.find((s) => s.topic === "ch-vote-turnout")!;
-  const order = ["earlyReturnsGE", "earlyReturnsBS", "earlyReturnsBE", "earlyReturnsVD", "earlyReturnsZH", "earlyReturns"] as const;
+  // Round-3 B2: the round-2 candidates (ge.ch/votations/participation-votations,
+  // bs.ch/politik-abstimmungen/abstimmungsresultate, be.ch/.../abstimmungen.html,
+  // vd.ch/themes/vie-politique/votations) all 404ed live. Bern and Vaud were
+  // DROPPED (no real page with a parseable turnout figure exists); GE and BS
+  // were replaced with pages verified 27 Nov: an HTTP GET returned 200 plus
+  // participation content.
+  const order = ["earlyReturnsGE", "earlyReturnsBS", "earlyReturnsZH", "earlyReturns"] as const;
   for (const key of order) {
     const link = seed.sources[key];
     assert.ok(link, `seed source ${key} must exist (cascade order NIT 4)`);
   }
-  // The non-Zürich cantons must NOT be the legacy stadt-zuerich URL.
-  for (const key of ["earlyReturnsGE", "earlyReturnsBS", "earlyReturnsBE", "earlyReturnsVD"] as const) {
-    assert.ok(!seed.sources[key]!.url.includes("stadt-zuerich.ch"), `${key} must be a non-Zürich chancery page`);
+  const verifiedUrls = [
+    "https://www.ge.ch/votations/20261129/",
+    "https://www.bs.ch/regierungsrat/staatskanzlei/politische-rechte/wahlen-und-abstimmungen",
+  ];
+  assert.equal(seed.sources.earlyReturnsGE!.url, verifiedUrls[0], "Geneva leads the cascade with the verified 200 page");
+  assert.equal(seed.sources.earlyReturnsBS!.url, verifiedUrls[1], "Basel-Stadt uses the verified Staatskanzlei page");
+  assert.ok(!seed.sources.earlyReturnsGE!.url.includes("stadt-zuerich.ch"), "GE must be a non-Zürich page");
+  assert.ok(!seed.sources.earlyReturnsBS!.url.includes("stadt-zuerich.ch"), "BS must be a non-Zürich page");
+  assert.ok(seed.sources.earlyReturnsBE === undefined && seed.sources.earlyReturnsVD === undefined, "Bern and Vaud are dropped (their old candidates 404; no verified replacement page exists)");
+  // The dead round-2 URLs must never reappear.
+  for (const dead of ["participation-votations", "politik-abstimmungen/abstimmungsresultate", "themes/vie-politique/votations"]) {
+    for (const link of Object.values(seed.sources)) {
+      assert.ok(!link.url.includes(dead), `dead round-2 URL fragment '${dead}' must not be shipped`);
+    }
   }
-  assert.ok(seed.sources.earlyReturnsGE!.url.includes("ge.ch"), "Geneva leads the cascade");
 });
 
 /* ---------------- Gate CLI (owner order): read-only mock-mode outputs ---------------- */
@@ -191,7 +208,7 @@ test("gate CLI: entry-state (mock) reports canSubmit and judgementPotRemainingBa
   const address = RESEARCH_SEEDS[0]!.marketAddress;
   const lines = await entryStateReport(api, address);
   const text = lines.join("\n");
-  assert.match(text, new RegExp(address.replace(/0x/g, "0x")));
+  assert.match(text, new RegExp(address.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), "market address appears verbatim in the report");
   assert.match(text, /accepts evidence:\s+(yes|no)/);
   assert.match(text, /judgment pot remaining:\s+\d+ base units/);
   assert.match(text, /submissions left on market:/);

@@ -291,6 +291,48 @@ test("fide miner: broadcast failure falls back to the scraped factsheet as expli
   assert.ok(r.spec.links.every((l) => !l.url.includes("multimedia/pgn")), JSON.stringify(r.spec.links));
 });
 
+test("fide miner (round-3 B1): factsheet 'FACT SHEET – Game 2, both games drawn' emits NO false headline/figure claims — per-game claims only when all counted games are parsed", async () => {
+  const seed = RESEARCH_SEEDS.find((s) => s.topic === "fide-game8")!;
+  const ratings = '{"players":[{"shortName":"Sindarov","rating":2780},{"shortName":"Gukesh","rating":2712}]}';
+  // QA round-2 replay fixture: sheet says game 2 is current, only the ONE
+  // latest game's block is present, and both real games were drawn. The old
+  // derivation over the single parsed game emitted "1 decisive game of 2" and
+  // "Sindarov had the white pieces in 0 of 2 games (Gukesh in 2)" — both false.
+  const factsheet = [
+    "# FACT SHEET – Game 2",
+    "FACT SHEET – Game 2 | World Chess Championship 2026 | Geneva",
+    "Match score: 1–1",
+    "White: D Gukesh  Black: Javokhir Sindarov  Result: 1/2-1/2",
+  ].join("\n");
+  const api: SourceApi = {
+    mock: false,
+    fetch: async (url) => {
+      if (url.includes("lichess.org")) throw new Error("HTTP 404 (round not found)");
+      if (url.includes("fide.com")) {
+        return { url, body: factsheet, fetchedAt: CTX.now.toISOString(), status: 200, mock: false };
+      }
+      return { url, body: ratings, fetchedAt: CTX.now.toISOString(), status: 200, mock: false };
+    },
+  };
+  const r = await refreshSeed(seed, api, CTX);
+  const p = r.spec.analysis.params as Record<string, unknown>;
+  assert.equal(p.scoreSource, "FIDE factsheet");
+  const headline = r.spec.headline ?? "";
+  const figures = r.spec.figures.join(" | ");
+  // The false round-2 claims must never appear.
+  assert.ok(!headline.includes("1 decisive game of 2"), headline);
+  assert.ok(!figures.includes("1 decisive game of 2"), figures);
+  assert.ok(!/white pieces in 0 of 2/.test(figures), figures);
+  assert.ok(!/Gukesh in 2\b/.test(figures), figures);
+  // With only one of two counted games parsed, no per-game score description
+  // or color-allocation claim may be emitted at all.
+  assert.ok(!/decisive game(s)? of 2/.test(`${headline} ${figures}`), `${headline} | ${figures}`);
+  assert.ok(!figures.includes("Color allocation in the match so far"), figures);
+  // The verifiable claims stay: latest game result, sheet match score.
+  assert.match(figures, /game 2 ended ½-½/);
+  assert.match(`${headline}${figures}`, /match score 1-1/);
+});
+
 test("fide seed URLs (BLOCKING 1): real Lichess broadcast tournament ID, no guessed slug/latest.pgn, no fidePgn source", () => {
   const seed = RESEARCH_SEEDS.find((s) => s.topic === "fide-game8")!;
   // Verified live on 27 Nov: GET /api/broadcast lists tour id qfkdt8mn =

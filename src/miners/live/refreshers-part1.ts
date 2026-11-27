@@ -312,8 +312,10 @@ export async function refreshChCpi(seed: SeedInput, api: SourceApi, ctx: Refresh
  */
 export function parseDerzeitTurnoutPct(body: string): string | undefined {
   for (const m of body.matchAll(/derzeit/gi)) {
-    const start = Math.max(0, m.index! - 140);
-    const window = body.slice(start, m.index! + 160);
+    // Round-3 N1: anchor the number search to the text AFTER "derzeit" — the
+    // old window started 140 chars earlier, so an unrelated preceding
+    // percentage in the same window could win.
+    const window = body.slice(Math.max(0, m.index! - 60), m.index! + 160);
     if (
       !/(stimmbeteiligung|stimmabgabe|briefflich|brieflich|wahlbeteiligung|wahlbrief|einlauf|beteiligung|participation|votation|vote|scrutin)/i.test(
         window,
@@ -321,7 +323,9 @@ export function parseDerzeitTurnoutPct(body: string): string | undefined {
     ) {
       continue;
     }
-    const num = window.match(/(\d+(?:[.,]\d+)?)\s*(?:%|Prozent)/i);
+    // The NUMBER must follow "derzeit"; only the turnout wording may precede
+    // it within the small look-back above.
+    const num = body.slice(m.index!, m.index! + 160).match(/(\d+(?:[.,]\d+)?)\s*(?:%|Prozent)/i);
     if (num) return num[1]!;
   }
   return undefined;
@@ -341,16 +345,18 @@ export function parseTrailingTurnoutPct(body: string): string | undefined {
   return m?.[1];
 }
 
-const TURNOUT_CANTON_ORDER = ["earlyReturnsGE", "earlyReturnsBS", "earlyReturnsBE", "earlyReturnsVD", "earlyReturnsZH", "earlyReturns"] as const;
+const TURNOUT_CANTON_ORDER = ["earlyReturnsGE", "earlyReturnsBS", "earlyReturnsZH", "earlyReturns"] as const;
 
 /** Path 3: Swiss federal vote turnout — cantonal postal returns + SRG survey. */
 export async function refreshChTurnout(seed: SeedInput, api: SourceApi, ctx: RefreshCtx): Promise<Refreshed> {
   const surveyDoc = await fresh(api, seed.sources.gfsbern, "gfsbern", ctx);
-  // Round-2 QA NIT 4: fetch-time cascade across cantonal chancery pages.
+  // Round-2 QA NIT 4: fetch-time cascade across cantonal early-returns pages.
   // Try each candidate in the anti-duplicate preference order (Geneva,
-  // Basel-Stadt, Bern, Vaud, Zurich, recorded-legacy last); move to the next
-  // canton when the fetch fails, the URL has no mock fixture (mock mode), or
-  // the page does not yield a turnout figure under the tightened parser.
+  // Basel-Stadt, Zurich, recorded-legacy last; round-3 B2 dropped Bern and
+  // Vaud — no real page with a parseable turnout figure exists on either
+  // canton's site); move to the next canton when the fetch fails, the URL has
+  // no mock fixture (mock mode), or the page does not yield a turnout figure
+  // under the tightened parser.
   const seen = new Set<string>();
   const candidates: { key: string; link: SourceLink }[] = [];
   for (const key of TURNOUT_CANTON_ORDER) {
@@ -384,11 +390,11 @@ export async function refreshChTurnout(seed: SeedInput, api: SourceApi, ctx: Ref
   if (!earlyDoc || earlyRaw === undefined) {
     throw new LiveMiningError(`no cantonal early-returns source yielded a turnout figure; tried: ${failures.join("; ")}`);
   }
-  const earlySourceLabel =
-    (earlyDoc.url === seed.sources.earlyReturns?.url
-      ? (seed.sources.earlyReturns as { label?: string } | undefined)?.label
-      : (candidates.find((c) => c.link.url === earlyDoc!.url)?.link as { label?: string } | undefined)?.label) ?? "Cantonal chancery";
-  const earlyDocLang = (candidates.find((c) => c.link.url === earlyDoc!.url)?.link as { lang?: string } | undefined)?.lang ?? "de";
+  // Round-3 N6: the matched candidate already carries its own link metadata —
+  // no second lookup by URL needed.
+  const matched = candidates.find((c) => c.link.url === earlyDoc.url)!;
+  const earlySourceLabel = matched.link.label ?? "Cantonal chancery";
+  const earlyDocLang = matched.link.lang ?? "de";
   // Firecrawl markdown is noisy (link brackets, nbsp, decimal commas): clean
   // before extracting, then match flexible label/number patterns. The 26 Nov
   // live run died here on `beträgt derzeit (\d+,\d) Prozent` — the live page

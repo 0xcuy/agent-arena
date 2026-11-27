@@ -79,33 +79,29 @@ export const RESEARCH_SEEDS: ResearchSeed[] = [
     market: { thresholdPct: 50.0 },
     assumptions: { intentionOffsetPct: 1.5, sdPct: 2.0 },
     sources: {
-      // Anti-duplicate: cantonal chancery early-return pages, non-Zurich
-      // cantons preferred (GE/BS/BE/VD), Zürich last. The mock fixture
-      // registry currently only records the Zürich snapshot, so mock mode
-      // resolves to it (pickEarlyReturnsSource skips fixture-less URLs);
-      // live mode picks the first cantonal page that is fresh.
+      // Anti-duplicate: cantonal early-return pages, cantons preferred (GE/BS),
+      // Zürich last. Round-3 B2: every URL below was verified live with an
+      // actual HTTP GET returning 200 plus participation content on 27 Nov —
+      // the round-2 candidates ge.ch/votations/participation-votations,
+      // bs.ch/politik-abstimmungen/abstimmungsresultate, be.ch/.../abstimmungen.html
+      // and vd.ch/themes/vie-politique/votations all returned genuine 404s, so
+      // live the cascade degraded to Zürich-only. Bern (be.ch/bern.ch) and
+      // Vaud (vd.ch) were DROPPED: no real page of theirs carrying a
+      // parseable turnout figure could be found (the be.ch/bern.ch pages that
+      // do exist serve no figure in the HTML). The mock fixture registry
+      // currently only records the Zürich snapshot, so mock mode resolves to
+      // it (pickEarlyReturnsSource skips fixture-less URLs); live mode picks
+      // the first cantonal page that is fresh.
       earlyReturnsGE: {
-        url: "https://www.ge.ch/votations/participation-votations",
-        label: "République et canton de Genève — participation aux votations",
+        url: "https://www.ge.ch/votations/20261129/",
+        label: "République et canton de Genève — Votation populaire du 29 novembre 2026 (participation)",
         lang: "fr",
         access: "scraped",
       },
       earlyReturnsBS: {
-        url: "https://www.bs.ch/politik-abstimmungen/abstimmungsresultate",
-        label: "Kanton Basel-Stadt Staatskanzlei — Abstimmungsbeteiligung",
+        url: "https://www.bs.ch/regierungsrat/staatskanzlei/politische-rechte/wahlen-und-abstimmungen",
+        label: "Kanton Basel-Stadt Staatskanzlei — Wahlen und Abstimmungen (Stimmbeteiligung)",
         lang: "de",
-        access: "scraped",
-      },
-      earlyReturnsBE: {
-        url: "https://www.be.ch/de/start/politik-suche/abstimmungen.html",
-        label: "Kanton Bern Staatskanzlei — Stimmbeteiligung",
-        lang: "de",
-        access: "scraped",
-      },
-      earlyReturnsVD: {
-        url: "https://www.vd.ch/themes/vie-politique/votations",
-        label: "Canton de Vaud — participation aux votations",
-        lang: "fr",
         access: "scraped",
       },
       earlyReturnsZH: {

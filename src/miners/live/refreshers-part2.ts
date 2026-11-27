@@ -210,18 +210,23 @@ function finishFideMatch(
   opts: { ratingA: number; ratingB: number; targetGame: number; drawShare: number; factsheetGamesPlayed?: number },
 ): Refreshed {
   const last = games[games.length - 1]!;
-  const gamesPlayed = opts.factsheetGamesPlayed ?? games.length;
+  // Round-3 N2: clamp the played-game count to the market's evaluation point
+  // (after-game-8 checkpoint) so figures stay checkpoint-true even if the
+  // pipeline runs after game 8; claims are derived from the sliced set.
+  const gamesPlayed = Math.min(opts.factsheetGamesPlayed ?? games.length, opts.targetGame);
+  const checkpointGames = games.slice(0, gamesPlayed);
+  const lastCheckpoint = checkpointGames[checkpointGames.length - 1]!;
   // The factsheet states the official running score ("Match score: 1–1",
   // halves allowed); PGN sources have no such line, so sum the parsed games.
   const scoreLine = resultSource === "fide-factsheet"
     ? cleanMarkdown(resultDoc.body).match(/Match score:\s*([\d.,]+)\s*[–-]\s*([\d.,]+)/)
     : undefined;
-  const scoreA = scoreLine ? parseEuropeanNumber(scoreLine[1]!) ?? runningScore(games).scoreA : runningScore(games).scoreA;
-  const scoreB = scoreLine ? parseEuropeanNumber(scoreLine[2]!) ?? runningScore(games).scoreB : runningScore(games).scoreB;
+  const scoreA = scoreLine ? parseEuropeanNumber(scoreLine[1]!) ?? runningScore(checkpointGames).scoreA : runningScore(checkpointGames).scoreA;
+  const scoreB = scoreLine ? parseEuropeanNumber(scoreLine[2]!) ?? runningScore(checkpointGames).scoreB : runningScore(checkpointGames).scoreB;
   const gamesRemaining = Math.max(opts.targetGame - gamesPlayed, 0);
   // Figures use the plain-hyphen convention ("½-½"); the factsheet scrape
   // yields an en dash, so normalize it here.
-  const resultWord = last.result.replace(/1\/2/g, "½").replace(/[–—]/g, "-");
+  const resultWord = lastCheckpoint.result.replace(/1\/2/g, "½").replace(/[–—]/g, "-");
   const resultLabel =
     resultSource === "lichess-broadcast" ? "Lichess broadcast PGN"
     : "FIDE factsheet";
@@ -232,24 +237,32 @@ function finishFideMatch(
   // Round-2 QA NIT 1: derive the headline score description and the color
   // allocation claim from the parsed PGN/factsheet data — never hardcode
   // "both games drawn" or a games-played color list.
-  const halfGames = games.filter((g) => g.result === "1/2-1/2").length;
-  const scoreDesc =
-    gamesPlayed === 0 ? "no games finished yet"
+  // Round-3 B1: on the factsheet fallback path `games` holds only the ONE
+  // latest parsed game while `gamesPlayed` comes from the sheet heading, so
+  // per-game derivations over `games` would be false (QA replay: sheet Game 2
+  // with both games drawn emitted "1 decisive game of 2" and a wrong color
+  // count). Emit these claims ONLY when every counted game was actually
+  // parsed (checkpointGames.length === gamesPlayed); otherwise omit them.
+  const fullParse = checkpointGames.length === gamesPlayed;
+  const halfGames = checkpointGames.filter((g) => g.result === "1/2-1/2").length;
+  const scoreDesc = !fullParse ? undefined
+    : gamesPlayed === 0 ? "no games finished yet"
     : halfGames === gamesPlayed
       ? gamesPlayed === 1 ? "the game drawn" : `all ${gamesPlayed} games drawn`
       : `${gamesPlayed - halfGames} decisive game${gamesPlayed - halfGames === 1 ? "" : "s"} of ${gamesPlayed}`;
-  const whiteGamesA = games.filter((g) => g.white.toLowerCase().includes("sindarov")).length;
-  const colorClaim = gamesPlayed === 0 ? undefined :
+  const whiteGamesA = checkpointGames.filter((g) => g.white.toLowerCase().includes("sindarov")).length;
+  const colorClaim = !fullParse ? undefined :
+    gamesPlayed === 0 ? undefined :
     `Color allocation in the match so far (from the parsed ${resultLabel}): Sindarov had the white pieces in ${whiteGamesA} of ${gamesPlayed} game${gamesPlayed === 1 ? "" : "s"} (Gukesh in ${gamesPlayed - whiteGamesA})`;
 
   const figures = [
-    `${resultLabel} (fetched ${ctx.now.toISOString().slice(0, 10)}): game ${gamesPlayed} ended ${resultWord}; match score ${scoreA}-${scoreB} (White: ${last.white}, Black: ${last.black})`,
+    `${resultLabel} (fetched ${ctx.now.toISOString().slice(0, 10)}): game ${gamesPlayed} ended ${resultWord}; match score ${scoreA}-${scoreB} (White: ${lastCheckpoint.white}, Black: ${lastCheckpoint.black})`,
     `Elo ratings of the two players (worldchess.com event metadata, live pages): Sindarov ${opts.ratingA} (UZB) vs Gukesh ${opts.ratingB} (IND) — a ${opts.ratingA - opts.ratingB} Elo gap`,
     ...(colorClaim ? [colorClaim] : []),
     `Model: exact enumeration of the ${gamesRemaining} remaining games (to the market's after-game-${opts.targetGame} evaluation) with per-game W/D/L derived from the live Elo gap and a stated ${(opts.drawShare * 100).toFixed(0)}% draw-share assumption, color-averaged`,
   ];
   const headline =
-    `After game ${gamesPlayed} of the FIDE World Chess Championship 2026 the official match score is ${scoreA}-${scoreB} (${scoreDesc}), and the challenger Sindarov — rated ${opts.ratingA} vs Gukesh's ${opts.ratingB} — ` +
+    `After game ${gamesPlayed} of the FIDE World Chess Championship 2026 the official match score is ${scoreA}-${scoreB}${scoreDesc ? ` (${scoreDesc})` : ""}, and the challenger Sindarov — rated ${opts.ratingA} vs Gukesh's ${opts.ratingB} — ` +
     `faces a ${gamesRemaining}-game stretch before the market's after-game-${opts.targetGame} evaluation point; an exact enumeration of Elo-implied outcomes puts him strictly ahead with the probability computed in the attached CSV.`;
 
   const links: SourceLink[] = [

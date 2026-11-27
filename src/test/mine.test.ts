@@ -245,17 +245,18 @@ test("live refresh: ch-cpi — BFS chain puts Nov 2025 at ~100.094 on the curren
   assert.ok(Math.abs(p.latestIndex - 101.7) < 0.01);
 });
 
-test("live refresh: fide — live score 1-1 after game 2 + live Elo 2780/2712", async () => {
+test("live refresh: fide — broadcast path (round-3 N3): live score 1.5-1.5 after game 3 + live Elo 2780/2712", async () => {
   const seed = RESEARCH_SEEDS.find((s) => s.topic === "fide-game8")!;
   const src = createSources(MOCK_CFG);
   const r = await refreshSeed(seed, src, CTX);
-  const p = r.spec.analysis.params as { scoreA: number; scoreB: number; eloA: number; eloB: number; gamesRemaining: number };
-  assert.equal(p.scoreA, 1);
-  assert.equal(p.scoreB, 1);
+  const p = r.spec.analysis.params as { scoreA: number; scoreB: number; eloA: number; eloB: number; gamesRemaining: number; scoreSource: string };
+  assert.equal(p.scoreSource, "Lichess broadcast PGN", "mock mode must exercise the primary broadcast path now that the Lichess fixture is recorded (N3)");
+  assert.equal(p.scoreA, 1.5);
+  assert.equal(p.scoreB, 1.5);
   assert.equal(p.eloA, 2780);
   assert.equal(p.eloB, 2712);
-  assert.equal(p.gamesRemaining, 6);
-  assert.ok(r.spec.links.some((l) => l.url.includes("fide.com")));
+  assert.equal(p.gamesRemaining, 5);
+  assert.ok(r.spec.links.some((l) => l.url.includes("lichess.org")));
 });
 
 test("live refresh: ietf ballot — 1 Yes, no DISCUSS, 14 members (live ballot state)", async () => {
@@ -279,11 +280,11 @@ test("live refresh: es-vox — tracker seats 64 vs the 60-seat bar", async () =>
   assert.equal(p.thresholdSeats, 60);
 });
 
-test("live refresh: ch-turnout + ch-war-materiel — live Zürich return and SRG poll", async () => {
+test("live refresh: ch-turnout + ch-war-materiel — cascade picks Geneva (mock fixture), SRG poll", async () => {
   const src = createSources(MOCK_CFG);
   const turnout = await refreshSeed(RESEARCH_SEEDS.find((s) => s.topic === "ch-vote-turnout")!, src, CTX);
   const tp = turnout.spec.analysis.params as { earlyReturnPct: number; participationIntentionPct: number; longTermAvgIntentionPct: number };
-  assert.ok(Math.abs(tp.earlyReturnPct - 39.6) < 0.01);
+  assert.ok(Math.abs(tp.earlyReturnPct - 30.3) < 0.01, `earlyReturnPct=${tp.earlyReturnPct}`);
   assert.equal(tp.participationIntentionPct, 52);
   assert.ok(Math.abs(tp.longTermAvgIntentionPct - 47.3) < 0.01);
   const km = await refreshSeed(RESEARCH_SEEDS.find((s) => s.topic === "ch-war-materiel")!, src, CTX);
@@ -377,8 +378,8 @@ test("polish 3: fide figure line reads as a plain result (no table-scrape name g
   assert.ok(!blob.includes("Black (White)"), `player-color artifact survived: ${blob}`);
   assert.ok(!blob.includes("Result (Black)"), `player-color artifact survived: ${blob}`);
   assert.ok(!/Sindarov Result/.test(blob), blob);
-  assert.ok(/game 2 ended ½-½; match score 1-1/.test(blob), `figure must read as a plain result: ${blob}`);
-  assert.ok(blob.includes("White: Gukesh Dommaraju, Black: Javokhir Sindarov"), blob);
+  assert.ok(/game 3 ended ½-½; match score 1\.5-1\.5/.test(blob), `figure must read as a plain result: ${blob}`);
+  assert.ok(blob.includes("(White: Sindarov, Javokhir, Black: Gukesh D)"), `plain PGN names expected: ${blob}`);
 });
 
 test("polish 4: release_gap_cdf uses the STANDARD median (mean of the two middle gaps, not the upper one)", () => {

@@ -101,9 +101,15 @@ on a day the sentence is reworded; run `body.match(/beträgt derzeit (\d+,\d) Pr
 → null → throw.
 
 **Suggested fix (shipped this round).** Fetch-time canton cascade (Geneva →
-Basel-Stadt → Bern → Vaud → Zürich) plus a tightened contextual turnout parser
+Basel-Stadt → Zürich) plus a tightened contextual turnout parser
 (`parseDerzeitTurnoutPct` etc. in `refreshers-part1.ts`) that requires the
-unit adjacent to the number and turnout wording in the sentence window.
+unit adjacent to the number and turnout wording in the sentence window. Every
+cascade URL was verified with an actual HTTP GET returning 200 plus live
+participation content (GE: `https://www.ge.ch/votations/20261129/`, BS: the
+Staatskanzlei "Wahlen und Abstimmungen" page); Bern and Vaud were dropped from
+the cascade because no page of theirs carrying a parseable turnout figure
+could be verified — the originally drafted `be.ch`/`vd.ch` candidates return
+404 and must not ship.
 
 ---
 
