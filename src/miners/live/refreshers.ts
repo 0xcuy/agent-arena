@@ -1,7 +1,14 @@
 import type { ResearchSpec, SourceLink } from "../../types.js";
 import type { SourceApi } from "./sources.js";
+import { hasMockFixture } from "./sources.js";
 import type { RefreshCtx, Refreshed, SeedInput } from "./refreshers-part1.js";
-import { refreshChCpi, refreshChTurnout, refreshChWarMateriel, refreshDeCpi } from "./refreshers-part1.js";
+import {
+  pickEarlyReturnsSource,
+  refreshChCpi,
+  refreshChTurnout,
+  refreshChWarMateriel,
+  refreshDeCpi,
+} from "./refreshers-part1.js";
 import {
   refreshBunReleases,
   refreshEsVox,
@@ -72,7 +79,36 @@ export const RESEARCH_SEEDS: ResearchSeed[] = [
     market: { thresholdPct: 50.0 },
     assumptions: { intentionOffsetPct: 1.5, sdPct: 2.0 },
     sources: {
-      stadtZh: {
+      // Anti-duplicate: cantonal early-return pages, cantons preferred (GE),
+      // Zürich last. Round-3 B2: every URL below was verified live with an
+      // actual HTTP GET returning 200 plus participation content on 27 Nov —
+      // the round-2 candidates ge.ch/votations/participation-votations,
+      // bs.ch/politik-abstimmungen/abstimmungsresultate, be.ch/.../abstimmungen.html
+      // and vd.ch/themes/vie-politique/votations all returned genuine 404s, so
+      // live the cascade degraded to Zürich-only. Bern (be.ch/bern.ch) and
+      // Vaud (vd.ch) were DROPPED: no real page of theirs carrying a
+      // parseable turnout figure could be found (the be.ch/bern.ch pages that
+      // do exist serve no figure in the HTML). Round-4 B2/NIT-3: Basel-Stadt
+      // (bs.ch Wahlen und Abstimmungen) was ALSO DROPPED — the real page was
+      // fetched (HTTP 200 on 27 Nov) and carries NO turnout figure in its
+      // HTML (the percentage ships as a chart image / OGD download), so the
+      // cascade can never parse it. Cascade: Geneva first (real snapshot
+      // recorded 2026-11-27, parses "30.3% de participation à J-4"),
+      // Zürich second/legacy last.
+      earlyReturnsGE: {
+        url: "https://www.ge.ch/votations/20261129/",
+        label: "République et canton de Genève — Votation populaire du 29 novembre 2026 (participation)",
+        lang: "fr",
+        access: "scraped",
+      },
+      earlyReturnsZH: {
+        url: "https://www.stadt-zuerich.ch/de/aktuell/news/2026/stimmbeteiligung.html",
+        label: "Stadt Zürich Stand Stimmbeteiligung (postal return)",
+        lang: "de",
+        access: "scraped",
+      },
+      // Legacy key kept for the recorded mock fixture; resolved last.
+      earlyReturns: {
         url: "https://www.stadt-zuerich.ch/de/aktuell/news/2026/stimmbeteiligung.html",
         label: "Stadt Zürich Stand Stimmbeteiligung (postal return)",
         lang: "de",
@@ -188,6 +224,23 @@ export const RESEARCH_SEEDS: ResearchSeed[] = [
     market: { targetGame: 8 },
     assumptions: { drawShare: 0.75 },
     sources: {
+      // Delphi fix 3 (round 2, verified 27 Nov): primary = the REAL Lichess
+      // broadcast PGN. Tournament ID `qfkdt8mn` = "FIDE World Chess
+      // Championship 2026" discovered via GET /api/broadcast (opaque base32
+      // IDs, no slug alias exists); `GET /api/broadcast/qfkdt8mn.pgn` returns
+      // 200 with the match PGN (all rounds). The previously guessed
+      // `/broadcast/wcc-2026/latest.pgn` 404s (no slug routes) and the guessed
+      // FIDE PGN download `fide.com/multimedia/pgn/wcc-2026.pgn` also 404s
+      // (verified live) — both removed; the scraped factsheet page is the only
+      // fallback, and it logs a warning when used. Anti-duplicate: the Lichess
+      // round URL is a same-day fresh catalyst, not the headline fide.com
+      // documents page dozens of miners cite.
+      lichessBroadcast: {
+        url: "https://lichess.org/api/broadcast/qfkdt8mn.pgn",
+        label: "Lichess broadcast PGN (WCC 2026, tournament qfkdt8mn — all rounds)",
+        lang: "en",
+        access: "api-json",
+      },
       fideNews: {
         url: "https://www.fide.com/new-documents/",
         label: "FIDE official factsheets (WCC 2026)",
@@ -299,12 +352,32 @@ const REFRESHERS: { [k in import("./refreshers-part1.js").RefreshKind]: (seed: S
 
 export const SEEDS_BY_MARKET = new Map(RESEARCH_SEEDS.map((s) => [s.marketAddress, s]));
 
+/**
+ * Resolve the anti-duplicate early-returns source for a seed before it reaches
+ * the refresher: prefer non-Zurich cantonal pages whose URL has a recorded
+ * mock fixture, fall back to the recorded Zürich snapshot otherwise. In live
+ * mode every candidate has a fixture-independent fetch path, so the first
+ * (Geneva-first) candidate wins unless cfg says otherwise.
+ */
+function withEarlyReturnsSelection(seed: ResearchSeed, api: SourceApi): ResearchSeed {
+  if (seed.kind !== "ch-turnout") return seed;
+  const chosen = pickEarlyReturnsSource(
+    seed.sources as unknown as Record<string, { url: string; label: string; lang: string }>,
+    (url) => (api.mock ? hasMockFixture(url) : true),
+  );
+  return {
+    ...seed,
+    sources: { ...seed.sources, earlyReturns: { ...chosen, access: "scraped" } },
+  } as ResearchSeed;
+}
+
 /** Refresh one seed into a live ResearchSpec. Errors mean the market is skipped. */
 export function refreshSeed(seed: ResearchSeed, api: SourceApi, ctx: RefreshCtx): Promise<Refreshed> {
   const fn = REFRESHERS[seed.kind];
   if (!fn) {
     return Promise.reject(new Error(`no refresher registered for kind "${seed.kind}"`));
   }
+  const prepared = withEarlyReturnsSelection(seed, api);
   return fn(
     {
       topic: seed.topic,
@@ -313,7 +386,7 @@ export function refreshSeed(seed: ResearchSeed, api: SourceApi, ctx: RefreshCtx)
       langs: seed.langs,
       market: seed.market,
       assumptions: seed.assumptions,
-      sources: seed.sources,
+      sources: prepared.sources,
     },
     api,
     ctx,

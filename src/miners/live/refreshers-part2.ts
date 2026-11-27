@@ -2,7 +2,9 @@ import type { SourceLink } from "../../types.js";
 import type { RefreshCtx, Refreshed, SeedInput } from "./refreshers-part1.js";
 import { assemble, dot, fresh, grp, LiveMiningError, requireNum, rx } from "./refreshers-part1.js";
 import type { SourceApi, SourceDoc } from "./sources.js";
-import { assertFresh } from "./sources.js";
+import { assertFresh, hasMockFixture } from "./sources.js";
+import { fetchGithubApi, githubOk } from "./github.js";
+import { cleanMarkdown, parseEuropeanNumber, parsePgnResults, pgnResultToScores, runningScore, type PgnGameResult } from "./markdown.js";
 
 /** Path 3: Spain Vox seats — live Electografía/Data10 tracking page. */
 export async function refreshEsVox(seed: SeedInput, api: SourceApi, ctx: RefreshCtx): Promise<Refreshed> {
@@ -128,23 +130,49 @@ export async function refreshIetfBallot(seed: SeedInput, api: SourceApi, ctx: Re
 
 /** Path 2: FIDE WCC 2026 match — official factsheet + embedded ratings. */
 export async function refreshFideMatch(seed: SeedInput, api: SourceApi, ctx: RefreshCtx): Promise<Refreshed> {
-  const [fideDoc, ratingsDoc] = await Promise.all([
-    fresh(api, seed.sources.fideNews, "fideNews", ctx),
-    fresh(api, seed.sources.worldchess, "worldchess", ctx),
-  ]);
-  const fide = fideDoc.body;
-  const scoreM = rx(fide, /Match score: (\d+)[–-](\d+)/, "match score");
-  const scoreA = requireNum(grp(scoreM, 1, "Sindarov score"), "Sindarov score");
-  const scoreB = requireNum(grp(scoreM, 2, "Gukesh score"), "Gukesh score");
-  const gameM = rx(fide, /FACT SHEET – Game (\d+)/, "factsheet game number");
-  const gamesPlayed = requireNum(grp(gameM, 1, "games played"), "games played");
-  // The factsheet reads "White: <name> Black: <name> Result:" on one scraped
-  // line; each name capture is bounded by the NEXT label so the table artifact
-  // ("Gukesh Dommaraju Black / Javokhir Sindarov Result") cannot leak in.
-  const whiteM = rx(fide, /FACT SHEET – Game \d+[\s\S]*?White: ([A-Za-zÉé]+(?:\s[A-Za-zÉé]+)*?)\s+Black:/, "White player");
-  const whiteName = grp(whiteM, 1, "White player").trim();
-  const blackM = rx(fide, /FACT SHEET – Game \d+[\s\S]*?Black: ([A-Za-zÉé]+(?:\s[A-Za-zÉé]+)*?)\s+Result:/, "Black player");
-  const blackName = grp(blackM, 1, "Black player").trim();
+  const targetGame = Number(seed.market.targetGame ?? 8);
+  const drawShare = Number(seed.assumptions.drawShare);
+
+  // Delphi fix 3: game results come from the Lichess broadcast PGN (live
+  // move-level, available while the game runs and frozen per round), with the
+  // official FIDE factsheet scrape as the ONLY fallback. Round 2: the
+  // previously guessed FIDE PGN download URL (fide.com/multimedia/pgn/
+  // wcc-2026.pgn) was verified live on 27 Nov to return 404 — no real FIDE
+  // PGN endpoint is discoverable — so the "fide-pgn" candidate was dropped;
+  // the factsheet is a last resort and logs a warning when used. The old
+  // factsheet-only scrape could not deliver finished-game data on the live
+  // run (the scraped page carried no completed-game RESULT block).
+  // Candidate sources are tried in order; in mock mode a URL with no recorded
+  // fixture is skipped (mock fetch would hard-fail, never invent content).
+  let resultSource: "lichess-broadcast" | "fide-factsheet" = "lichess-broadcast";
+  let games: PgnGameResult[];
+  let resultDoc: SourceDoc;
+  let broadcastDoc: SourceDoc | undefined;
+  let factsheetGamesPlayed: number | undefined;
+  try {
+    broadcastDoc = await tryFresh(api, seed.sources.lichessBroadcast, ctx);
+    games = parsePgnResults(broadcastDoc.body, "Sindarov");
+    if (games.length === 0) throw new LiveMiningError("lichess broadcast PGN parsed to zero games");
+    resultDoc = broadcastDoc;
+  } catch {
+    const fideDoc = await fresh(api, seed.sources.fideNews, "fideNews", ctx);
+    // Explicit last-resort warning: the factsheet scrape already failed once
+    // live (26 Nov) — never present it as a verified primary source.
+    console.warn(`[fide-game8] WARNING: last-resort fallback to scraped FIDE factsheet (${fideDoc.url}) — lichess broadcast PGN unavailable`);
+    games = parseFactsheetBlock(fideDoc.body, "Sindarov");
+    if (games.length === 0) {
+      throw new LiveMiningError("no finished-game results from lichess broadcast or factsheet");
+    }
+    // The factsheet carries only the LATEST game's block; the running count
+    // comes from its heading ("FACT SHEET – Game 2").
+    const sheetNo = grp(rx(fideDoc.body, /FACT SHEET\s*[–-]\s*Game\s+(\d+)/, "factsheet game number"), 1, "factsheet game number");
+    factsheetGamesPlayed = Number(sheetNo);
+    resultSource = "fide-factsheet";
+    resultDoc = fideDoc;
+  }
+
+  // Ratings stay on the World Chess event metadata.
+  const ratingsDoc = await fresh(api, seed.sources.worldchess, "worldchess", ctx);
   const ratingA = requireNum(
     grp(rx(ratingsDoc.body, /shortName\\?"?:?\\?"?Sindarov[^}]{0,120}rating\\?"?:(\d{4})/, "Sindarov rating"), 1, "Sindarov rating"),
     "Sindarov rating",
@@ -153,40 +181,149 @@ export async function refreshFideMatch(seed: SeedInput, api: SourceApi, ctx: Ref
     grp(rx(ratingsDoc.body, /shortName\\?"?:?\\?"?Gukesh[^}]{0,120}rating\\?"?:(\d{4})/, "Gukesh rating"), 1, "Gukesh rating"),
     "Gukesh rating",
   );
+  return finishFideMatch(seed, ctx, games, resultSource, resultDoc, ratingsDoc, {
+    ratingA,
+    ratingB,
+    targetGame,
+    drawShare,
+    factsheetGamesPlayed,
+  });
+}
 
-  const targetGame = Number(seed.market.targetGame ?? 8);
-  const gamesRemaining = Math.max(targetGame - gamesPlayed, 0);
-  const drawShare = Number(seed.assumptions.drawShare);
+/** fresh() that tolerates unregistered mock fixtures (returns null instead of throwing). */
+async function tryFresh(api: SourceApi, src: { url: string } | undefined, ctx: RefreshCtx): Promise<SourceDoc> {
+  if (!src) throw new LiveMiningError("source not configured");
+  if (api.mock && !hasMockFixture(src.url)) {
+    throw new LiveMiningError(`no mock fixture for ${src.url} — skipping to the next candidate source`);
+  }
+  return fresh(api, src as SeedInput["sources"][keyof SeedInput["sources"]], "candidate", ctx);
+}
 
+/** Shared tail of the fide miner: figures/headline/links/assemble. */
+function finishFideMatch(
+  seed: SeedInput,
+  ctx: RefreshCtx,
+  games: PgnGameResult[],
+  resultSource: "lichess-broadcast" | "fide-factsheet",
+  resultDoc: SourceDoc,
+  ratingsDoc: SourceDoc,
+  opts: { ratingA: number; ratingB: number; targetGame: number; drawShare: number; factsheetGamesPlayed?: number },
+): Refreshed {
+  const last = games[games.length - 1]!;
+  // Round-3 N2: clamp the played-game count to the market's evaluation point
+  // (after-game-8 checkpoint) so figures stay checkpoint-true even if the
+  // pipeline runs after game 8; claims are derived from the sliced set.
+  // Round-4 NIT-8: report the ACTUALLY parsed game count (games.length),
+  // not the heading-derived gamesPlayed — a broadcast with >8 finished games
+  // parsed to more than 8, and "8 games parsed" would undercount it.
+  const gamesPlayed = Math.min(opts.factsheetGamesPlayed ?? games.length, opts.targetGame);
+  const checkpointGames = games.slice(0, gamesPlayed);
+  // Round-4 NIT-5: on the factsheet fallback the one parsed block is the
+  // SHEET's game (opts.factsheetGamesPlayed), which can sit PAST the clamped
+  // checkpoint (sheet for game 9 → checkpoint after game 8). Report that
+  // game under its real number — never as "game 8 ended …" — and derive the
+  // result figure from the actually parsed game, not from an empty slice.
+  const parsedGameNo = resultSource === "fide-factsheet" ? opts.factsheetGamesPlayed! : games.length;
+  // Round-4 B1/NIT-8: the ACTUALLY parsed game count — every PgnGameResult
+  // the parsers produced (1 on the factsheet fallback, all N on a broadcast),
+  // never the heading-derived count and never the clamp value.
+  const parsedCount = games.length;
+  // Round-3 B1 / Round-4 NIT-4: true only when every counted game was actually
+  // parsed (factsheet fallback parses just the ONE latest game's block, while
+  // the count comes from the sheet heading).
+  const fullParse = parsedCount === gamesPlayed;
+  // The factsheet states the official running score ("Match score: 1–1",
+  // halves allowed); PGN sources have no such line, so sum the parsed games.
+  const scoreLine = resultSource === "fide-factsheet"
+    ? cleanMarkdown(resultDoc.body).match(/Match score:\s*([\d.,]+)\s*[–-]\s*([\d.,]+)/)
+    : undefined;
+  // Round-4 NIT-5: when the count is clamped at the checkpoint (sheet for a
+  // game beyond game 8), the sheet's "Match score" line is the CURRENT score
+  // (post-game-N), not the after-game-8 score the headline would present —
+  // omit the score claim there. When the sheet is NOT clamped, its stated
+  // score stays quotable even on the fallback path (the sheet states it);
+  // NIT-4: with NO Match score line and no full parse, the score is omitted
+  // rather than substituted by the one-game running score.
+  const clampedSheet = resultSource === "fide-factsheet" && (opts.factsheetGamesPlayed ?? 0) > opts.targetGame;
+  const useSheetScore = !!scoreLine && !clampedSheet;
+  const checkpointScore = runningScore(checkpointGames);
+  const scoreA = useSheetScore ? parseEuropeanNumber(scoreLine[1]!) ?? checkpointScore.scoreA : checkpointScore.scoreA;
+  const scoreB = useSheetScore ? parseEuropeanNumber(scoreLine[2]!) ?? checkpointScore.scoreB : checkpointScore.scoreB;
+  const gamesRemaining = Math.max(opts.targetGame - gamesPlayed, 0);
+  // Figures use the plain-hyphen convention ("½-½"); the factsheet scrape
+  // yields an en dash, so normalize it here.
+  const resultWord = last.result.replace(/1\/2/g, "½").replace(/[–—]/g, "-");
+  const resultLabel =
+    resultSource === "lichess-broadcast" ? "Lichess broadcast PGN"
+    : "FIDE factsheet";
+  const sourceUrl =
+    resultSource === "lichess-broadcast" ? seed.sources.lichessBroadcast?.url ?? resultDoc.url
+    : resultDoc.url;
+
+  // Round-2 QA NIT 1: derive the headline score description and the color
+  // allocation claim from the parsed PGN/factsheet data — never hardcode
+  // "both games drawn" or a games-played color list.
+  // Round-3 B1: on the factsheet fallback path `games` holds only the ONE
+  // latest parsed game while `gamesPlayed` comes from the sheet heading, so
+  // per-game derivations over `games` would be false (QA replay: sheet Game 2
+  // with both games drawn emitted "1 decisive game of 2" and a wrong color
+  // count). Emit these claims ONLY when every counted game was actually
+  // parsed (fullParse, computed above); otherwise omit them.
+  const halfGames = checkpointGames.filter((g) => g.result === "1/2-1/2").length;
+  const scoreDesc = !fullParse ? undefined
+    : gamesPlayed === 0 ? "no games finished yet"
+    : halfGames === gamesPlayed
+      ? gamesPlayed === 1 ? "the game drawn" : `all ${gamesPlayed} games drawn`
+      : `${gamesPlayed - halfGames} decisive game${gamesPlayed - halfGames === 1 ? "" : "s"} of ${gamesPlayed}`;
+  const whiteGamesA = checkpointGames.filter((g) => g.white.toLowerCase().includes("sindarov")).length;
+  const colorClaim = !fullParse ? undefined :
+    gamesPlayed === 0 ? undefined :
+    `Color allocation in the match so far (from the parsed ${resultLabel}): Sindarov had the white pieces in ${whiteGamesA} of ${gamesPlayed} game${gamesPlayed === 1 ? "" : "s"} (Gukesh in ${gamesPlayed - whiteGamesA})`;
+
+  // Round-4 NIT-4: with no Match score line AND no full parse (or a sheet
+  // clamped past the checkpoint, NIT-5), the score is OMITTED — not
+  // substituted by the one-game running score. Broadcast sources have no
+  // score line at all: their score is the sum over every parsed checkpoint
+  // game, which is exact.
+  const scorePresent = resultSource === "lichess-broadcast" || useSheetScore;
+  const scoreFigures = scorePresent
+    ? `; match score ${scoreA}-${scoreB}`
+    : "";
   const figures = [
-    `FIDE official factsheet (fide.com/new-documents, fetched ${ctx.now.toISOString().slice(0, 10)}): game ${gamesPlayed} ended ½-½; match score ${scoreA}-${scoreB} (White: ${whiteName}, Black: ${blackName})`,
-    `Elo ratings of the two players (worldchess.com event metadata, live pages): Sindarov ${ratingA} (UZB) vs Gukesh ${ratingB} (IND) — a ${ratingA - ratingB} Elo gap`,
-    `Color allocation in the match so far: Sindarov held White in games 1 and 3 (stated in the factsheet's game-3 preview: "white pieces for the second time in the match tomorrow")`,
-    `Model: exact enumeration of the ${gamesRemaining} remaining games (to the market's after-game-${targetGame} evaluation) with per-game W/D/L derived from the live Elo gap and a stated ${(drawShare * 100).toFixed(0)}% draw-share assumption, color-averaged`,
+    `${resultLabel} (fetched ${ctx.now.toISOString().slice(0, 10)}): game ${parsedGameNo} ended ${resultWord}${scoreFigures} (White: ${last.white}, Black: ${last.black})`,
+    `Elo ratings of the two players (worldchess.com event metadata, live pages): Sindarov ${opts.ratingA} (UZB) vs Gukesh ${opts.ratingB} (IND) — a ${opts.ratingA - opts.ratingB} Elo gap`,
+    ...(colorClaim ? [colorClaim] : []),
+    `Model: exact enumeration of the ${gamesRemaining} remaining games (to the market's after-game-${opts.targetGame} evaluation) with per-game W/D/L derived from the live Elo gap and a stated ${(opts.drawShare * 100).toFixed(0)}% draw-share assumption, color-averaged`,
   ];
   const headline =
-    `After game ${gamesPlayed} of the FIDE World Chess Championship 2026 the official match score is ${scoreA}-${scoreB} (both games drawn), and the challenger Sindarov — rated ${ratingA} vs Gukesh's ${ratingB} — ` +
-    `faces a ${gamesRemaining}-game stretch before the market's after-game-${targetGame} evaluation point; an exact enumeration of Elo-implied outcomes puts him strictly ahead with the probability computed in the attached CSV.`;
+    `After game ${gamesPlayed} of the FIDE World Chess Championship 2026${scorePresent ? ` the official match score is ${scoreA}-${scoreB}` : ""}${scoreDesc ? ` (${scoreDesc})` : ""}, and the challenger Sindarov — rated ${opts.ratingA} vs Gukesh's ${opts.ratingB} — ` +
+    `faces a ${gamesRemaining}-game stretch before the market's after-game-${opts.targetGame} evaluation point; an exact enumeration of Elo-implied outcomes puts him strictly ahead with the probability computed in the attached CSV.`;
 
-  // One link ships (item budget); the ratings source URL + fetch time stay pasted
-  // in the note and the CSV source rows.
   const links: SourceLink[] = [
     {
-      url: fideDoc.url,
-      label: "FIDE official documents page: WCC 2026 game factsheets (result, colors, match score)",
+      url: sourceUrl,
+      label: resultSource === "fide-factsheet"
+        ? "FIDE official documents page: WCC 2026 game factsheets (result, colors, match score)"
+        : "Lichess broadcast: WCC 2026 games (per-round PGN, RESULT tags)",
       lang: "en",
-      access: "scraped",
-      expect: [`Match score: ${scoreA}`, "½"],
+      access: resultSource === "fide-factsheet" ? "scraped" : "api-json",
+      expect: resultSource === "fide-factsheet" ? ["½"] : [`[Result "${last.result}"]`],
     },
   ];
   return assemble(
     seed,
-    [fideDoc, ratingsDoc],
+    [resultDoc, ratingsDoc],
     headline,
     figures,
     [
-      `fide.com/new-documents (static): FACT SHEET Game ${gamesPlayed} — White ${whiteName}, Black ${blackName}, result ½-½, match score ${scoreA}-${scoreB}.`,
-      `worldchess.com event page ${ratingsDoc.url} (static, fetched in this run): embedded player metadata — Sindarov rated ${ratingA}, Gukesh rated ${ratingB}; URL + fetch time also in data.csv source rows.`,
+      // Round-4 B1/NIT-8: report the actually parsed count, never the
+      // heading-derived count — the fallback path parses exactly ONE game
+      // block, so "2 games parsed" was false. NIT-4: the running-score
+      // clause is omitted when the score was not quotable.
+      scorePresent
+        ? `${resultLabel} (fetched in this run): ${parsedCount} game${parsedCount === 1 ? "" : "s"} parsed, last result ${resultWord}, running score ${scoreA}-${scoreB}.`
+        : `${resultLabel} (fetched in this run): ${parsedCount} game${parsedCount === 1 ? "" : "s"} parsed, last result ${resultWord}.`,
+      `worldchess.com event page ${ratingsDoc.url} (static, fetched in this run): embedded player metadata — Sindarov rated ${opts.ratingA}, Gukesh rated ${opts.ratingB}; URL + fetch time also in data.csv source rows.`,
     ],
     links,
     {
@@ -196,18 +333,35 @@ export async function refreshFideMatch(seed: SeedInput, api: SourceApi, ctx: Ref
         nameB: "Gukesh",
         scoreA,
         scoreB,
-        eloA: ratingA,
-        eloB: ratingB,
+        eloA: opts.ratingA,
+        eloB: opts.ratingB,
         gamesRemaining,
-        drawShare,
-        scoreSource: "fide.com/new-documents factsheet",
+        drawShare: opts.drawShare,
+        scoreSource: resultLabel,
         eloSource: "worldchess.com event metadata",
       },
     },
     [
-      `Draw-share assumption (${(drawShare * 100).toFixed(0)}%, color-averaged) is a stated model input, not a fetched figure`,
+      `Draw-share assumption (${(opts.drawShare * 100).toFixed(0)}%, color-averaged) is a stated model input, not a fetched figure`,
     ],
   );
+}
+
+/** Last-resort parser: the scraped FIDE factsheet's "White: … Black: … Result: ½–½" block. */
+function parseFactsheetBlock(body: string, playerA: string): PgnGameResult[] {
+  const cleaned = cleanMarkdown(body);
+  const m = cleaned.match(
+    /White:\s*([A-Za-zÉé.\- ]+?)\s+Black:\s*([A-Za-zÉé.\- ]+?)\s+Result:\s*([^\sA-Za-z]+)/,
+  );
+  if (!m) return [];
+  const white = m[1]!.trim();
+  const black = m[2]!.trim();
+  const result = m[3]!.replace(/\s/g, "");
+  const scores = pgnResultToScores(result);
+  if (!scores) return [];
+  const [w, b] = scores;
+  const aIsWhite = white.toLowerCase().includes(playerA.toLowerCase());
+  return [{ white, black, result, scoreA: aIsWhite ? w : b, scoreB: aIsWhite ? b : w }];
 }
 
 /** Path 2: English Wikipedia article count — siteinfo + Size-of-Wikipedia table. */
@@ -307,7 +461,18 @@ export async function releasesGapCdf(
     filterTags?: (rows: { tag: string; published: string }[]) => { tag: string; published: string }[];
   },
 ): Promise<Refreshed> {
-  const [relDoc] = await Promise.all([fresh(api, seed.sources[opts.sourceKey], opts.sourceKey, ctx)]);
+  // Round-2 QA NIT 2: nodejs.org/dist/index.json is NOT a GitHub API URL —
+  // sending it through fetchGithubApi would attach GitHub's JSON media-type
+  // Accept header to nodejs.org. Non-GitHub URLs go through the plain
+  // freshness-gated transport (fresh) with no GitHub headers.
+  const sourceUrl = seed.sources[opts.sourceKey]!.url;
+  const isGithubApi = new URL(sourceUrl).hostname === "api.github.com";
+  const [relDoc] = await Promise.all([
+    isGithubApi
+      ? fetchGithubApi(sourceUrl, api)
+      : fresh(api, seed.sources[opts.sourceKey], opts.sourceKey, ctx),
+  ]);
+  githubOk(relDoc, ctx.live, ctx.now);
   const raw = relDoc.json as unknown;
   if (!Array.isArray(raw)) throw new LiveMiningError(`${opts.kindLabel} endpoint did not return a JSON array`);
   const rows = (raw as Record<string, string>[])
@@ -386,9 +551,10 @@ export async function refreshGoRelease(seed: SeedInput, api: SourceApi, ctx: Ref
   let milestone: { number: number; title: string; open_issues: number; closed_issues: number } | undefined;
   for (let page = 1; page <= 10 && !milestone; page++) {
     const url = String(seed.market.milestonesUrl).replace("{page}", String(page));
-    const doc = await api.fetch(url);
-    if (ctx.live) assertFresh(doc, ctx.now);
-    if (doc.status !== 200) throw new LiveMiningError(`milestone search page ${page} returned HTTP ${doc.status}`);
+    // DIRECT api.github.com call (never Firecrawl): the routed request came
+    // back HTTP 415 and killed the go miner on the 26 Nov run.
+    const doc = await fetchGithubApi(url, api);
+    githubOk(doc, ctx.live, ctx.now);
     const arr = doc.json as { number: number; title: string; open_issues: number; closed_issues: number }[];
     if (!Array.isArray(arr) || arr.length === 0) break;
     milestone = arr.find((m) => m.title === wantedTitle);

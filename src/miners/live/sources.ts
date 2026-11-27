@@ -63,6 +63,11 @@ export function htmlToText(html: string): string {
 
 const UA = "siera-labs-evidence-miner/1.0 (+https://delphi.fyi)";
 
+/** True when mock mode has a recorded fixture for this URL (never fetches). */
+export function hasMockFixture(url: string): boolean {
+  return LIVE_FIXTURES[url] !== undefined;
+}
+
 export function createSources(cfg: AgentConfig): SourceApi {
   if (cfg.mode === "mock") {
     return {

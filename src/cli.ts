@@ -2,6 +2,7 @@ import { resolveConfig } from "./config.js";
 import { planPipeline, runPipeline } from "./pipeline.js";
 import { SEEDS_BY_MARKET } from "./miners/live/refreshers.js";
 import { createDelphiApi } from "./delphi/client.js";
+import { entryStateReport, limitsReport, listEvidence } from "./gate-cli.js";
 
 /**
  * CLI.
@@ -11,6 +12,10 @@ import { createDelphiApi } from "./delphi/client.js";
  *                                   (live-mode `npm run plan` is the SDK smoke test: it
  *                                   reads limits/terms/markets/entry-state and writes NOTHING)
  *   npm run accept-terms            explicit one-time terms acceptance (live, never automatic)
+ *   npm run evidence:list           read-only gate: prior submissions + drafts manifests
+ *                                   [-- --market=<address>]
+ *   npm run evidence:limits         read-only gate: remaining quota
+ *   npm run entry-state -- <addr>   read-only gate: one market's canSubmit + judgment pot
  *
  * There is no --live-submit path in this build: submitting stays triple-guarded
  * (mode=live AND LIVE_SUBMIT=1 AND --live-submit) and no code path passes
@@ -21,6 +26,10 @@ interface Args {
   mode?: "mock" | "live";
   liveSubmit: boolean;
   maxDrafts: number;
+  list?: boolean;
+  limits?: boolean;
+  market?: string;
+  marketArg?: string;
 }
 
 function parseArgs(argv: string[]): Args {
@@ -29,7 +38,11 @@ function parseArgs(argv: string[]): Args {
     if (a === "--mode=mock") args.mode = "mock";
     else if (a === "--mode=live") args.mode = "live";
     else if (a === "--live-submit") args.liveSubmit = true;
+    else if (a === "--list") args.list = true;
+    else if (a === "--limits") args.limits = true;
+    else if (a.startsWith("--market=")) args.market = a.slice("--market=".length);
     else if (a.startsWith("--max-drafts=")) args.maxDrafts = Number(a.slice("--max-drafts=".length));
+    else if (!a.startsWith("--") && args.marketArg === undefined) args.marketArg = a;
     else {
       console.error(`unknown argument: ${a}`);
       process.exit(2);
@@ -103,8 +116,40 @@ async function main() {
     }
     const accepted = await api.acceptTerms(terms.version);
     console.log(`terms ${accepted.version} accepted at ${accepted.acceptedAt}.`);
+  } else if (cmd === "evidence" && (args.list || args.limits)) {
+    // Read-only pre-submit gate. Never submits, never accepts terms, never writes.
+    const api = await createDelphiApi(cfg);
+    if (args.limits) {
+      console.log(`evidence limits (mode=${api.mode}):`);
+      for (const line of limitsReport(await api.getLimits())) console.log(`  ${line}`);
+    }
+    if (args.list) {
+      const { submissions, drafts } = await listEvidence(api, args.market);
+      console.log(`prior submissions (mode=${api.mode}${args.market ? `, market=${args.market}` : ""}): ${submissions.length}`);
+      for (const s of submissions) {
+        console.log(`  - ${s.id} at ${s.createdAt} status=${s.status} note=${s.note ?? ""} markets=${s.markets.map((m) => m.marketAddress).join(",")}`);
+      }
+      console.log(`local drafts (drafts/ manifests): ${drafts.length}`);
+      for (const d of drafts) {
+        console.log(`  - ${d.topic} ${d.marketAddress} stance=${d.stance} submitted=${d.submittedAt ?? "no"} verdict=${d.verdict ?? "n/a"}`);
+      }
+      const dups = drafts.filter((d) => d.verdict === "duplicate");
+      if (dups.length > 0) {
+        console.log(`ALREADY-JUDGED DUPLICATES (do not re-mine these markets without a materially new catalyst):`);
+        for (const d of dups) console.log(`  * ${d.topic} (${d.marketAddress})`);
+      }
+    }
+  } else if (cmd === "entry-state") {
+    // Read-only pre-submit gate for one market.
+    if (!args.marketArg) {
+      console.error("usage: entry-state <marketAddress> [--mode=mock|live]");
+      process.exit(2);
+    }
+    const api = await createDelphiApi(cfg);
+    for (const line of await entryStateReport(api, args.marketArg)) console.log(line);
   } else {
-    console.error("usage: cli.ts run|plan|accept-terms [--mode=mock|live] [--max-drafts=N]");
+    console.error("usage: cli.ts run|plan|accept-terms|evidence|entry-state [--mode=mock|live] [--max-drafts=N]");
+    console.error("       evidence --list [--market=<address>] | evidence --limits | entry-state <marketAddress>");
     console.error("       (accept-terms: live only; the pipeline never accepts terms for you)");
     process.exit(2);
   }

@@ -13,7 +13,10 @@
     "plan": "tsx src/cli.ts plan",
     "test": "tsx --test src/test/*.test.ts",
     "typecheck": "tsc --noEmit",
-    "accept-terms": "tsx src/cli.ts accept-terms --mode=live"
+    "accept-terms": "tsx src/cli.ts accept-terms --mode=live",
+    "evidence:list": "tsx src/cli.ts evidence --list",
+    "evidence:limits": "tsx src/cli.ts evidence --limits",
+    "entry-state": "tsx src/cli.ts entry-state"
   },
   "dependencies": {
     "@gensyn-ai/gensyn-delphi-sdk": "^2.4.1"
