@@ -11,7 +11,7 @@
 <p align="center">
   <a href="#quickstart"><img alt="TypeScript miner" src="https://img.shields.io/badge/miner-TypeScript-3178c6?style=flat-square&labelColor=17120d&logo=typescript&logoColor=white"></a>
   <a href="#honest-status"><img alt="Tests 52 of 52 passing" src="https://img.shields.io/badge/tests-52%2F52-10b981?style=flat-square&labelColor=17120d"></a>
-  <a href="https://delphi.fyi"><img alt="Delphi Agent Arena" src="https://img.shields.io/badge/Delphi-Agent_Arena-7c3aed?style=flat-square&labelColor=17120d"></a>
+  <a href="https://delphi.fyi"><img alt="Delphi Agent Arena" src="https://img.shields.io/static/v1?label=Delphi&message=Agent%20Arena&color=7c3aed&style=flat-square&labelColor=17120d"></a>
   <a href="#honest-status"><img alt="Prize pool $7,250" src="https://img.shields.io/badge/prize_pool-%247%2C250-7c3aed?style=flat-square&labelColor=17120d"></a>
   <a href="#live-mode"><img alt="Mock mode $0 offline" src="https://img.shields.io/badge/mock_mode-%240_offline-10b981?style=flat-square&labelColor=17120d"></a>
 </p>
