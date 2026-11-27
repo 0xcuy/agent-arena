@@ -319,11 +319,22 @@ test("fide miner (round-3 B1): factsheet 'FACT SHEET – Game 2, both games draw
   assert.equal(p.scoreSource, "FIDE factsheet");
   const headline = r.spec.headline ?? "";
   const figures = r.spec.figures.join(" | ");
+  // Round-4 B1: the emitted sourceDescriptions live in the note/data rows the
+  // judge sees — they must not over-claim what was parsed either.
+  const descriptions = (r.spec as unknown as { sourceDescriptions?: string[] }).sourceDescriptions ?? [];
+  const descriptionsJoined = descriptions.join(" | ");
   // The false round-2 claims must never appear.
   assert.ok(!headline.includes("1 decisive game of 2"), headline);
   assert.ok(!figures.includes("1 decisive game of 2"), figures);
   assert.ok(!/white pieces in 0 of 2/.test(figures), figures);
   assert.ok(!/Gukesh in 2\b/.test(figures), figures);
+  // Round-4 B1: with only ONE game block actually parsed, no description may
+  // say "2 games parsed" (the old text derived the count from the heading).
+  for (const d of descriptions) {
+    assert.ok(!d.includes("2 games parsed"), `round-4 B1: false parsed-count in a source description: ${d}`);
+    assert.ok(!/parsed, last result .*running score/.test(d) || /\b1 game\b/.test(d), `round-4 B1: parsed count must be the actually parsed count: ${d}`);
+  }
+  assert.ok(descriptions.some((d) => d.includes("1 game parsed")), `round-4 B1: the actually parsed count (1) is stated: ${descriptionsJoined}`);
   // With only one of two counted games parsed, no per-game score description
   // or color-allocation claim may be emitted at all.
   assert.ok(!/decisive game(s)? of 2/.test(`${headline} ${figures}`), `${headline} | ${figures}`);
@@ -343,4 +354,116 @@ test("fide seed URLs (BLOCKING 1): real Lichess broadcast tournament ID, no gues
   assert.ok(!seed.sources.lichessBroadcast!.url.includes("wcc-2026"), "no slug routes exist on /api/broadcast");
   assert.equal((seed.sources as Record<string, unknown>).fidePgn, undefined, "guessed FIDE PGN URL 404s live — fallback removed");
   assert.ok(seed.sources.fideNews, "factsheet stays as the explicit last-resort fallback");
+});
+
+/* --------------------- Round 4: B2 + NIT-3/4/5/8 regressions --------------------- */
+
+test("round-4 B2/NIT-3: the recorded GE mock fixture is the REAL page — number-first '30.3% de participation à J-4' parses", async () => {
+  const seed = RESEARCH_SEEDS.find((s) => s.topic === "ch-vote-turnout")!;
+  const { readFileSync } = await import("node:fs");
+  const meta = JSON.parse(readFileSync("src/miners/live/fixtures-meta.json", "utf-8")) as Record<string, string>;
+  const fixtureUrl = seed.sources.earlyReturnsGE!.url;
+  // The GE fixture must be a REAL recorded snapshot: it has a fetch time (a
+  // synthetic fixture must be labelled as such and carry none).
+  const fetchedAt = meta[fixtureUrl];
+  assert.ok(fetchedAt, `GE fixture must have a recorded fetch time in fixtures-meta.json (${fixtureUrl})`);
+  assert.match(fetchedAt, /^\d{4}-\d{2}-\d{2}T/, "real ISO fetch timestamp");
+  // Replay the exact mock path: raw fixture → cleanMarkdown → parsers, via
+  // the real mock source layer.
+  const { createSources } = await import("../miners/live/sources.js");
+  const { refreshChTurnout } = await import("../miners/live/refreshers-part1.js");
+  const src = createSources({ mode: "mock" } as unknown as AgentConfig);
+  const r = await refreshChTurnout(seed, src as never, CTX);
+  const tp = r.spec.analysis.params as Record<string, unknown>;
+  // The REAL page (fetched 2026-11-27, HTTP 200) states the cantonal rate
+  // number-first: "30.3% / de participation à J-4" (J-5 = 27.4, J-6 = 24.0).
+  assert.ok(Math.abs((tp.earlyReturnPct as number) - 30.3) < 0.01, `earlyReturnPct=${tp.earlyReturnPct} (real ge.ch page is number-first, 30.3 at J-4)`);
+  // The shipped link must be the Geneva page, not the Zürich fallback.
+  assert.ok(r.spec.links.some((l) => l.url.includes("ge.ch")), JSON.stringify(r.spec.links));
+  // The fabricated round-2 values must never appear in the emitted spec.
+  for (const fabricated of ["27.9", "25.1", "22.4"]) {
+    assert.ok(!JSON.stringify(r.spec).includes(fabricated), `fabricated value ${fabricated} must not appear`);
+  }
+});
+
+test("round-4 NIT-3: Basel-Stadt is dropped from the cascade (its real page has no parseable turnout figure in the HTML)", () => {
+  const seed = RESEARCH_SEEDS.find((s) => s.topic === "ch-vote-turnout")!;
+  // The real bs.ch page was fetched on 27 Nov (HTTP 200): the turnout
+  // percentage ships ONLY as a chart image / OGD download, never as HTML
+  // text — "Die Stimmbeteiligung beträgt derzeit 22,4 %" exists nowhere.
+  assert.equal(seed.sources.earlyReturnsBS, undefined, "BS dropped from the cascade");
+});
+
+test("round-4 NIT-4: factsheet fallback with NO 'Match score:' line OMITS the score (no one-game substitution)", async () => {
+  const seed = RESEARCH_SEEDS.find((s) => s.topic === "fide-game8")!;
+  const ratings = '{"players":[{"shortName":"Sindarov","rating":2780},{"shortName":"Gukesh","rating":2712}]}';
+  const factsheet = [
+    "# FACT SHEET – Game 2",
+    "FACT SHEET – Game 2 | World Chess Championship 2026 | Geneva",
+    "White: D Gukesh  Black: Javokhir Sindarov  Result: 1/2-1/2",
+  ].join("\n");
+  const api: SourceApi = {
+    mock: false,
+    fetch: async (url) => {
+      if (url.includes("lichess.org")) throw new Error("HTTP 404 (round not found)");
+      if (url.includes("fide.com")) return { url, body: factsheet, fetchedAt: CTX.now.toISOString(), status: 200, mock: false };
+      return { url, body: ratings, fetchedAt: CTX.now.toISOString(), status: 200, mock: false };
+    },
+  };
+  const r = await refreshSeed(seed, api, CTX);
+  const spec = r.spec as unknown as { sourceDescriptions: string[] };
+  const text = `${r.spec.headline ?? ""} | ${r.spec.figures.join(" | ")} | ${spec.sourceDescriptions.join(" | ")}`;
+  assert.ok(!/match score \d/.test(text), `NIT-4: score must be omitted, got: ${text}`);
+  assert.ok(!/running score \d/.test(text), `NIT-4: running score must be omitted, got: ${text}`);
+  // The verifiable per-game claim stays.
+  assert.match(r.spec.figures.join(" | "), /game 2 ended ½-½/);
+  // The description still states the actually parsed count (B1 rule).
+  assert.ok(spec.sourceDescriptions.some((d) => d.includes("1 game parsed")), JSON.stringify(spec.sourceDescriptions));
+  assert.ok(!spec.sourceDescriptions.some((d) => d.includes("2 games parsed")), JSON.stringify(spec.sourceDescriptions));
+});
+
+test("round-4 NIT-5: factsheet for game 9 clamps to the after-game-8 checkpoint — sheet score OMITTED (it is post-game-9, not after-game-8)", async () => {
+  const seed = RESEARCH_SEEDS.find((s) => s.topic === "fide-game8")!;
+  const ratings = '{"players":[{"shortName":"Sindarov","rating":2780},{"shortName":"Gukesh","rating":2712}]}';
+  const factsheet = [
+    "# FACT SHEET – Game 9",
+    "FACT SHEET – Game 9 | World Chess Championship 2026 | Geneva",
+    "Match score: 5½–3½",
+    "White: Javokhir Sindarov  Black: D Gukesh  Result: 1-0",
+  ].join("\n");
+  const api: SourceApi = {
+    mock: false,
+    fetch: async (url) => {
+      if (url.includes("lichess.org")) throw new Error("HTTP 404 (round not found)");
+      if (url.includes("fide.com")) return { url, body: factsheet, fetchedAt: CTX.now.toISOString(), status: 200, mock: false };
+      return { url, body: ratings, fetchedAt: CTX.now.toISOString(), status: 200, mock: false };
+    },
+  };
+  const r = await refreshSeed(seed, api, CTX);
+  const spec = r.spec as unknown as { sourceDescriptions: string[] };
+  const text = `${r.spec.headline ?? ""} | ${r.spec.figures.join(" | ")} | ${spec.sourceDescriptions.join(" | ")}`;
+  // NIT-5: the sheet's 5½–3½ is the post-game-9 score — never presented as
+  // the after-game-8 (checkpoint) score, and the parsed game is not mislabeled.
+  assert.ok(!text.includes("5.5-3.5") && !text.includes("5½–3½"), `NIT-5: clamped sheet score must be omitted, got: ${text}`);
+  assert.ok(!text.includes("game 8 ended 1-0"), `NIT-5: game 9's result must not be labelled game 8, got: ${text}`);
+  assert.match(r.spec.figures.join(" | "), /game 9 ended 1-0/);
+});
+
+test("round-4 NIT-8: broadcast with more than 8 finished games reports the ACTUALLY parsed count", async () => {
+  const seed = RESEARCH_SEEDS.find((s) => s.topic === "fide-game8")!;
+  const ratings = '{"players":[{"shortName":"Sindarov","rating":2780},{"shortName":"Gukesh","rating":2712}]}';
+  // 10 finished games in the broadcast PGN (checkpoint stays after game 8).
+  const pgn = Array.from({ length: 10 }, (_, i) =>
+    `[Event "WCC 2026"]\n[White "${i % 2 === 0 ? "D Gukesh" : "Javokhir Sindarov"}"]\n[Black "${i % 2 === 0 ? "Javokhir Sindarov" : "D Gukesh"}"]\n[Result "1/2-1/2"]\n\n1. d4 d5 1/2-1/2`,
+  ).join("\n\n");
+  const api: SourceApi = {
+    mock: false,
+    fetch: async (url) => ({ url, body: url.includes("lichess.org") ? pgn : ratings, fetchedAt: CTX.now.toISOString(), status: 200, mock: false }),
+  };
+  const r = await refreshSeed(seed, api, CTX);
+  const spec = r.spec as unknown as { sourceDescriptions: string[] };
+  const d = spec.sourceDescriptions.find((x) => x.includes("parsed"));
+  assert.ok(d, JSON.stringify(spec.sourceDescriptions));
+  assert.ok(d.includes("10 games parsed"), `NIT-8: the actually parsed count (10) must be stated, got: ${d}`);
+  assert.ok(!d.includes("8 games parsed"), `NIT-8: must not undercount to the clamp value, got: ${d}`);
 });

@@ -7,17 +7,20 @@ import { cleanMarkdown, parseEuropeanNumber } from "./markdown.js";
  * Anti-duplicate source selection (Delphi anti-duplicate plan): saturated
  * Wave-1 markets must not cite the headline dataSources URL everyone submits.
  * For the Swiss vote miners the early-returns source is a CANTONAL chancery
- * page — Geneva / Basel-Stadt / Bern / Vaud preferred, Zürich (the crowded,
- * most-submitted canton) only as the last resort. A URL with no mock fixture
- * cannot be used (mock mode would hard-fail), so candidates without a
- * recorded fixture are skipped — that keeps `npm run mock` on the recorded
- * Zürich snapshot until a Geneva/Basel fixture is recorded.
+ * page — Geneva preferred, Zürich (the crowded, most-submitted canton) as the
+ * last resort. Round-4 B2/NIT-3: Basel-Stadt (plus Bern and Vaud earlier) was
+ * DROPPED from the cascade — the real bs.ch election page carries no turnout
+ * figure in its HTML (the percentage ships as a chart image / OGD download),
+ * so it could never parse. A URL with no mock fixture cannot be used (mock
+ * mode would hard-fail), so candidates without a recorded fixture are
+ * skipped; with the real ge.ch snapshot recorded, mock mode resolves to
+ * Geneva and Zürich remains the fallback.
  */
 export function pickEarlyReturnsSource(
   sources: Record<string, { url: string; label: string; lang: string }>,
   mockHasFixture: (url: string) => boolean,
 ): { url: string; label: string; lang: string } {
-  const PREFERENCE = ["ge", "bs", "be", "vd", "zh"];
+  const PREFERENCE = ["ge", "zh"];
   for (const key of PREFERENCE) {
     const src = sources[`earlyReturns${key.toUpperCase()}`];
     if (src && mockHasFixture(src.url)) return src;
@@ -331,12 +334,25 @@ export function parseDerzeitTurnoutPct(body: string): string | undefined {
   return undefined;
 }
 
-/** French cantonal wording: "participation ... actuellement (de) X %" — unit adjacent, turnout wording required. */
+/**
+ * French cantonal wording. Two real page layouts are handled:
+ *  - wording-first: "participation ... actuellement (de) X %"
+ *  - number-first (the real ge.ch votation page, round-4 NIT-3):
+ *    "30.3%\nde participation à J-4" — the unit is glued to the number and
+ *    the turnout wording follows on the next line, so the gap may contain
+ *    whitespace/newlines (never a sentence period).
+ */
 export function parseFrenchTurnoutPct(body: string): string | undefined {
-  const m = body.match(
+  const wordingFirst = body.match(
     /participation[^.\n]{0,120}?(?:est\s+|de\s+|actuellement\s+(?:de\s+)?)?(\d+(?:[.,]\d+)?)\s*(?:%|prozent)/i,
   );
-  return m?.[1];
+  if (wordingFirst) return wordingFirst[1];
+  // Number-first: "30.3%\nde participation à J-4" — unit adjacent to the
+  // number, turnout wording required immediately after (only whitespace and
+  // an optional "de" may sit between, so an unrelated percentage on the same
+  // line can never win).
+  const numberFirst = body.match(/(\d+(?:[.,]\d+)?)\s*(?:%|prozent)\s*(?:de\s+)?participation/i);
+  return numberFirst?.[1];
 }
 
 /** Trailing wording: "X % briefliche Stimmabgabe" — turnout wording required within 80 chars after the unit. */
@@ -345,18 +361,22 @@ export function parseTrailingTurnoutPct(body: string): string | undefined {
   return m?.[1];
 }
 
-const TURNOUT_CANTON_ORDER = ["earlyReturnsGE", "earlyReturnsBS", "earlyReturnsZH", "earlyReturns"] as const;
+// Round-4 NIT-3: Basel-Stadt dropped — the real page has no parseable turnout
+// figure in its HTML (percentage ships as chart image / OGD download), so it
+// could never parse. Cascade: Geneva first, then the recorded Zürich legacy.
+const TURNOUT_CANTON_ORDER = ["earlyReturnsGE", "earlyReturnsZH", "earlyReturns"] as const;
 
 /** Path 3: Swiss federal vote turnout — cantonal postal returns + SRG survey. */
 export async function refreshChTurnout(seed: SeedInput, api: SourceApi, ctx: RefreshCtx): Promise<Refreshed> {
   const surveyDoc = await fresh(api, seed.sources.gfsbern, "gfsbern", ctx);
   // Round-2 QA NIT 4: fetch-time cascade across cantonal early-returns pages.
-  // Try each candidate in the anti-duplicate preference order (Geneva,
-  // Basel-Stadt, Zurich, recorded-legacy last; round-3 B2 dropped Bern and
-  // Vaud — no real page with a parseable turnout figure exists on either
-  // canton's site); move to the next canton when the fetch fails, the URL has
-  // no mock fixture (mock mode), or the page does not yield a turnout figure
-  // under the tightened parser.
+  // Try each candidate in the anti-duplicate preference order (Geneva then
+  // Zurich; Bern, Vaud and Basel-Stadt were dropped — round-3 B2 for Bern and
+  // Vaud, whose pages carry no parseable figure, and round-4 NIT-3 for
+  // Basel-Stadt, whose percentage ships only as an image/OGD download);
+  // move to the next canton when the fetch fails, the URL has no mock
+  // fixture (mock mode), or the page does not yield a turnout figure under
+  // the tightened parser.
   const seen = new Set<string>();
   const candidates: { key: string; link: SourceLink }[] = [];
   for (const key of TURNOUT_CANTON_ORDER) {

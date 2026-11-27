@@ -80,11 +80,10 @@ test("NIT 5: 'derzeit' turnout regex requires adjacent %/Prozent + turnout wordi
 
 /* ---------------- NIT 4: fetch-time canton cascade ---------------- */
 
-test("NIT 4: turnout cascade tries Geneva first, then Basel-Stadt, then Zürich — first canton that parses wins (round-3 B2: Bern/Vaud dropped)", async () => {
+test("NIT 4: turnout cascade tries Geneva first, then Zürich — first canton that parses wins (round-3 B2: Bern/Vaud dropped, round-4 NIT-3: Basel-Stadt dropped)", async () => {
   const seed = RESEARCH_SEEDS.find((s) => s.topic === "ch-vote-turnout")!;
   const fetched: string[] = [];
   const geBody = "La participation aux votations est actuellement de 30,3 % des suffrages.";
-  const bsBody = "Die Stimmbeteiligung beträgt derzeit 39,27 % (briefliche Stimmabgaben).";
   const zhBody = "Die Stimmbeteiligung beträgt derzeit 44,9 % (eingelaufene Stimmzettel).";
   const gfsBody = "Die Teilnahmeabsicht liegt unverändert bei 52 %. Der langjährigen Durchschnitt von 46,5 % wird übertroffen.";
   const api: SourceApi = {
@@ -93,8 +92,7 @@ test("NIT 4: turnout cascade tries Geneva first, then Basel-Stadt, then Zürich 
       fetched.push(url);
       const body =
         url.includes("gfsbern") ? gfsBody
-        : url.includes("ge.ch") ? (fetched.filter((u) => u.includes("ge.ch")).length === 1 ? new Error("HTTP 503") as unknown as string : geBody)
-        : url.includes("bs.ch") ? bsBody
+        : url.includes("ge.ch") ? new Error("HTTP 503") as unknown as string
         : url.includes("stadt-zuerich.ch") ? zhBody
         : new Error(`unexpected ${url}`) as unknown as string;
       if (typeof body !== "string") throw body;
@@ -103,13 +101,14 @@ test("NIT 4: turnout cascade tries Geneva first, then Basel-Stadt, then Zürich 
   };
   const r = await refreshSeed(seed, api, CTX);
   const figs = r.spec.figures.join(" | ");
-  // Geneva fetch failed once → moved on; the FIRST canton that parses is Basel-Stadt 39,27 % (rendered 39.3%).
+  // Geneva fetch failed once → the cascade moves on; Basel-Stadt is dropped
+  // (NIT-3), so the FIRST canton that parses is Zürich 44,9 %.
   assert.ok(fetched.some((u) => u.includes("ge.ch")), "Geneva tried first");
   assert.ok(fetched.filter((u) => u.includes("ge.ch")).length === 1, "Geneva is not retried after its failure");
-  assert.ok(fetched.some((u) => u.includes("bs.ch")), "Basel-Stadt is next in the cascade");
-  assert.match(figs, /Basel-Stadt[^|]*39\.3%/, JSON.stringify(figs));
-  assert.ok(!fetched.some((u) => u.includes("stadt-zuerich.ch")), "cascade must stop at the first parsing canton (Zürich is only a last resort)");
-  assert.ok(!figs.includes("44.9"), "Zürich's figure must never win while Basel-Stadt parses");
+  assert.ok(!seed.sources.earlyReturnsBS, "Basel-Stadt is dropped from the cascade (round-4 NIT-3)");
+  assert.ok(!fetched.some((u) => u.includes("bs.ch")), "Basel-Stadt is never fetched");
+  assert.ok(fetched.some((u) => u.includes("stadt-zuerich.ch")), "cascade falls through to Zürich when Geneva fails");
+  assert.match(figs, /44\.9/, JSON.stringify(figs));
 });
 
 /* ---------------- NIT 8: parsePgnResults game-boundary splitting ---------------- */
@@ -143,22 +142,20 @@ test("NIT 6: the turnout picker's shipped sources are LIVE cantonal pages verifi
   // Round-3 B2: the round-2 candidates (ge.ch/votations/participation-votations,
   // bs.ch/politik-abstimmungen/abstimmungsresultate, be.ch/.../abstimmungen.html,
   // vd.ch/themes/vie-politique/votations) all 404ed live. Bern and Vaud were
-  // DROPPED (no real page with a parseable turnout figure exists); GE and BS
-  // were replaced with pages verified 27 Nov: an HTTP GET returned 200 plus
-  // participation content.
-  const order = ["earlyReturnsGE", "earlyReturnsBS", "earlyReturnsZH", "earlyReturns"] as const;
+  // DROPPED (no real page with a parseable turnout figure exists); GE was
+  // replaced with a page verified 27 Nov (HTTP GET 200 + participation
+  // content). Round-4 B2/NIT-3: Basel-Stadt was ALSO DROPPED — its real page
+  // was fetched (HTTP 200, 27 Nov) and carries NO turnout figure in its HTML
+  // (the percentage ships as a chart image / OGD download), so the cascade
+  // could never parse it.
+  const order = ["earlyReturnsGE", "earlyReturnsZH", "earlyReturns"] as const;
   for (const key of order) {
     const link = seed.sources[key];
     assert.ok(link, `seed source ${key} must exist (cascade order NIT 4)`);
   }
-  const verifiedUrls = [
-    "https://www.ge.ch/votations/20261129/",
-    "https://www.bs.ch/regierungsrat/staatskanzlei/politische-rechte/wahlen-und-abstimmungen",
-  ];
-  assert.equal(seed.sources.earlyReturnsGE!.url, verifiedUrls[0], "Geneva leads the cascade with the verified 200 page");
-  assert.equal(seed.sources.earlyReturnsBS!.url, verifiedUrls[1], "Basel-Stadt uses the verified Staatskanzlei page");
+  assert.equal(seed.sources.earlyReturnsGE!.url, "https://www.ge.ch/votations/20261129/", "Geneva leads the cascade with the verified 200 page");
   assert.ok(!seed.sources.earlyReturnsGE!.url.includes("stadt-zuerich.ch"), "GE must be a non-Zürich page");
-  assert.ok(!seed.sources.earlyReturnsBS!.url.includes("stadt-zuerich.ch"), "BS must be a non-Zürich page");
+  assert.ok(seed.sources.earlyReturnsBS === undefined, "Basel-Stadt is dropped (round-4 NIT-3: no parseable turnout figure in its HTML)");
   assert.ok(seed.sources.earlyReturnsBE === undefined && seed.sources.earlyReturnsVD === undefined, "Bern and Vaud are dropped (their old candidates 404; no verified replacement page exists)");
   // The dead round-2 URLs must never reappear.
   for (const dead of ["participation-votations", "politik-abstimmungen/abstimmungsresultate", "themes/vie-politique/votations"]) {

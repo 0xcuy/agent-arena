@@ -111,6 +111,13 @@ the cascade because no page of theirs carrying a parseable turnout figure
 could be verified — the originally drafted `be.ch`/`vd.ch` candidates return
 404 and must not ship.
 
+**Clarification (round 4).** A re-fetch of the real pages showed Basel-Stadt's
+percentage ships only as a chart image / OGD download — its HTML carries no
+parseable turnout figure at all — so BS was dropped from the cascade too,
+which now runs Geneva (real page, number-first "30.3% de participation à
+J-4", handled by the parser) with Zürich as the fallback; nothing about the
+cascade invents or substitutes a figure.
+
 ---
 
 ## 4. ch-war-materiel — parse failure on the gfs.bern survey page

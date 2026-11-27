@@ -79,7 +79,7 @@ export const RESEARCH_SEEDS: ResearchSeed[] = [
     market: { thresholdPct: 50.0 },
     assumptions: { intentionOffsetPct: 1.5, sdPct: 2.0 },
     sources: {
-      // Anti-duplicate: cantonal early-return pages, cantons preferred (GE/BS),
+      // Anti-duplicate: cantonal early-return pages, cantons preferred (GE),
       // Zürich last. Round-3 B2: every URL below was verified live with an
       // actual HTTP GET returning 200 plus participation content on 27 Nov —
       // the round-2 candidates ge.ch/votations/participation-votations,
@@ -88,20 +88,17 @@ export const RESEARCH_SEEDS: ResearchSeed[] = [
       // live the cascade degraded to Zürich-only. Bern (be.ch/bern.ch) and
       // Vaud (vd.ch) were DROPPED: no real page of theirs carrying a
       // parseable turnout figure could be found (the be.ch/bern.ch pages that
-      // do exist serve no figure in the HTML). The mock fixture registry
-      // currently only records the Zürich snapshot, so mock mode resolves to
-      // it (pickEarlyReturnsSource skips fixture-less URLs); live mode picks
-      // the first cantonal page that is fresh.
+      // do exist serve no figure in the HTML). Round-4 B2/NIT-3: Basel-Stadt
+      // (bs.ch Wahlen und Abstimmungen) was ALSO DROPPED — the real page was
+      // fetched (HTTP 200 on 27 Nov) and carries NO turnout figure in its
+      // HTML (the percentage ships as a chart image / OGD download), so the
+      // cascade can never parse it. Cascade: Geneva first (real snapshot
+      // recorded 2026-11-27, parses "30.3% de participation à J-4"),
+      // Zürich second/legacy last.
       earlyReturnsGE: {
         url: "https://www.ge.ch/votations/20261129/",
         label: "République et canton de Genève — Votation populaire du 29 novembre 2026 (participation)",
         lang: "fr",
-        access: "scraped",
-      },
-      earlyReturnsBS: {
-        url: "https://www.bs.ch/regierungsrat/staatskanzlei/politische-rechte/wahlen-und-abstimmungen",
-        label: "Kanton Basel-Stadt Staatskanzlei — Wahlen und Abstimmungen (Stimmbeteiligung)",
-        lang: "de",
         access: "scraped",
       },
       earlyReturnsZH: {

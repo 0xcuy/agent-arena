@@ -213,20 +213,46 @@ function finishFideMatch(
   // Round-3 N2: clamp the played-game count to the market's evaluation point
   // (after-game-8 checkpoint) so figures stay checkpoint-true even if the
   // pipeline runs after game 8; claims are derived from the sliced set.
+  // Round-4 NIT-8: report the ACTUALLY parsed game count (games.length),
+  // not the heading-derived gamesPlayed — a broadcast with >8 finished games
+  // parsed to more than 8, and "8 games parsed" would undercount it.
   const gamesPlayed = Math.min(opts.factsheetGamesPlayed ?? games.length, opts.targetGame);
   const checkpointGames = games.slice(0, gamesPlayed);
-  const lastCheckpoint = checkpointGames[checkpointGames.length - 1]!;
+  // Round-4 NIT-5: on the factsheet fallback the one parsed block is the
+  // SHEET's game (opts.factsheetGamesPlayed), which can sit PAST the clamped
+  // checkpoint (sheet for game 9 → checkpoint after game 8). Report that
+  // game under its real number — never as "game 8 ended …" — and derive the
+  // result figure from the actually parsed game, not from an empty slice.
+  const parsedGameNo = resultSource === "fide-factsheet" ? opts.factsheetGamesPlayed! : games.length;
+  // Round-4 B1/NIT-8: the ACTUALLY parsed game count — every PgnGameResult
+  // the parsers produced (1 on the factsheet fallback, all N on a broadcast),
+  // never the heading-derived count and never the clamp value.
+  const parsedCount = games.length;
+  // Round-3 B1 / Round-4 NIT-4: true only when every counted game was actually
+  // parsed (factsheet fallback parses just the ONE latest game's block, while
+  // the count comes from the sheet heading).
+  const fullParse = parsedCount === gamesPlayed;
   // The factsheet states the official running score ("Match score: 1–1",
   // halves allowed); PGN sources have no such line, so sum the parsed games.
   const scoreLine = resultSource === "fide-factsheet"
     ? cleanMarkdown(resultDoc.body).match(/Match score:\s*([\d.,]+)\s*[–-]\s*([\d.,]+)/)
     : undefined;
-  const scoreA = scoreLine ? parseEuropeanNumber(scoreLine[1]!) ?? runningScore(checkpointGames).scoreA : runningScore(checkpointGames).scoreA;
-  const scoreB = scoreLine ? parseEuropeanNumber(scoreLine[2]!) ?? runningScore(checkpointGames).scoreB : runningScore(checkpointGames).scoreB;
+  // Round-4 NIT-5: when the count is clamped at the checkpoint (sheet for a
+  // game beyond game 8), the sheet's "Match score" line is the CURRENT score
+  // (post-game-N), not the after-game-8 score the headline would present —
+  // omit the score claim there. When the sheet is NOT clamped, its stated
+  // score stays quotable even on the fallback path (the sheet states it);
+  // NIT-4: with NO Match score line and no full parse, the score is omitted
+  // rather than substituted by the one-game running score.
+  const clampedSheet = resultSource === "fide-factsheet" && (opts.factsheetGamesPlayed ?? 0) > opts.targetGame;
+  const useSheetScore = !!scoreLine && !clampedSheet;
+  const checkpointScore = runningScore(checkpointGames);
+  const scoreA = useSheetScore ? parseEuropeanNumber(scoreLine[1]!) ?? checkpointScore.scoreA : checkpointScore.scoreA;
+  const scoreB = useSheetScore ? parseEuropeanNumber(scoreLine[2]!) ?? checkpointScore.scoreB : checkpointScore.scoreB;
   const gamesRemaining = Math.max(opts.targetGame - gamesPlayed, 0);
   // Figures use the plain-hyphen convention ("½-½"); the factsheet scrape
   // yields an en dash, so normalize it here.
-  const resultWord = lastCheckpoint.result.replace(/1\/2/g, "½").replace(/[–—]/g, "-");
+  const resultWord = last.result.replace(/1\/2/g, "½").replace(/[–—]/g, "-");
   const resultLabel =
     resultSource === "lichess-broadcast" ? "Lichess broadcast PGN"
     : "FIDE factsheet";
@@ -242,8 +268,7 @@ function finishFideMatch(
   // per-game derivations over `games` would be false (QA replay: sheet Game 2
   // with both games drawn emitted "1 decisive game of 2" and a wrong color
   // count). Emit these claims ONLY when every counted game was actually
-  // parsed (checkpointGames.length === gamesPlayed); otherwise omit them.
-  const fullParse = checkpointGames.length === gamesPlayed;
+  // parsed (fullParse, computed above); otherwise omit them.
   const halfGames = checkpointGames.filter((g) => g.result === "1/2-1/2").length;
   const scoreDesc = !fullParse ? undefined
     : gamesPlayed === 0 ? "no games finished yet"
@@ -255,14 +280,23 @@ function finishFideMatch(
     gamesPlayed === 0 ? undefined :
     `Color allocation in the match so far (from the parsed ${resultLabel}): Sindarov had the white pieces in ${whiteGamesA} of ${gamesPlayed} game${gamesPlayed === 1 ? "" : "s"} (Gukesh in ${gamesPlayed - whiteGamesA})`;
 
+  // Round-4 NIT-4: with no Match score line AND no full parse (or a sheet
+  // clamped past the checkpoint, NIT-5), the score is OMITTED — not
+  // substituted by the one-game running score. Broadcast sources have no
+  // score line at all: their score is the sum over every parsed checkpoint
+  // game, which is exact.
+  const scorePresent = resultSource === "lichess-broadcast" || useSheetScore;
+  const scoreFigures = scorePresent
+    ? `; match score ${scoreA}-${scoreB}`
+    : "";
   const figures = [
-    `${resultLabel} (fetched ${ctx.now.toISOString().slice(0, 10)}): game ${gamesPlayed} ended ${resultWord}; match score ${scoreA}-${scoreB} (White: ${lastCheckpoint.white}, Black: ${lastCheckpoint.black})`,
+    `${resultLabel} (fetched ${ctx.now.toISOString().slice(0, 10)}): game ${parsedGameNo} ended ${resultWord}${scoreFigures} (White: ${last.white}, Black: ${last.black})`,
     `Elo ratings of the two players (worldchess.com event metadata, live pages): Sindarov ${opts.ratingA} (UZB) vs Gukesh ${opts.ratingB} (IND) — a ${opts.ratingA - opts.ratingB} Elo gap`,
     ...(colorClaim ? [colorClaim] : []),
     `Model: exact enumeration of the ${gamesRemaining} remaining games (to the market's after-game-${opts.targetGame} evaluation) with per-game W/D/L derived from the live Elo gap and a stated ${(opts.drawShare * 100).toFixed(0)}% draw-share assumption, color-averaged`,
   ];
   const headline =
-    `After game ${gamesPlayed} of the FIDE World Chess Championship 2026 the official match score is ${scoreA}-${scoreB}${scoreDesc ? ` (${scoreDesc})` : ""}, and the challenger Sindarov — rated ${opts.ratingA} vs Gukesh's ${opts.ratingB} — ` +
+    `After game ${gamesPlayed} of the FIDE World Chess Championship 2026${scorePresent ? ` the official match score is ${scoreA}-${scoreB}` : ""}${scoreDesc ? ` (${scoreDesc})` : ""}, and the challenger Sindarov — rated ${opts.ratingA} vs Gukesh's ${opts.ratingB} — ` +
     `faces a ${gamesRemaining}-game stretch before the market's after-game-${opts.targetGame} evaluation point; an exact enumeration of Elo-implied outcomes puts him strictly ahead with the probability computed in the attached CSV.`;
 
   const links: SourceLink[] = [
@@ -282,7 +316,13 @@ function finishFideMatch(
     headline,
     figures,
     [
-      `${resultLabel} (fetched in this run): ${gamesPlayed} games parsed, last result ${resultWord}, running score ${scoreA}-${scoreB}.`,
+      // Round-4 B1/NIT-8: report the actually parsed count, never the
+      // heading-derived count — the fallback path parses exactly ONE game
+      // block, so "2 games parsed" was false. NIT-4: the running-score
+      // clause is omitted when the score was not quotable.
+      scorePresent
+        ? `${resultLabel} (fetched in this run): ${parsedCount} game${parsedCount === 1 ? "" : "s"} parsed, last result ${resultWord}, running score ${scoreA}-${scoreB}.`
+        : `${resultLabel} (fetched in this run): ${parsedCount} game${parsedCount === 1 ? "" : "s"} parsed, last result ${resultWord}.`,
       `worldchess.com event page ${ratingsDoc.url} (static, fetched in this run): embedded player metadata — Sindarov rated ${opts.ratingA}, Gukesh rated ${opts.ratingB}; URL + fetch time also in data.csv source rows.`,
     ],
     links,
