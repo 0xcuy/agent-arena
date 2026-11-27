@@ -13,7 +13,7 @@ KEY FIGURES (pasted from the sources, fetched in this run; timestamps in data.cs
 Base-effect arithmetic on Destatis's live VPI series (fetched 2026-11-26): the Nov 2026 Vorläufiges Ergebnis (preliminary result) only needs a -0.29% MoM print to reach +2.8% YoY — consumer prices could fall by 0.29% on the month and the market's bar would still clear, because the Oct 2026 index (126.5) already sits above the 2.8%-implied level against the Nov 2025 base (122.7).
 
 2) SOURCES
-- [1] https://www.destatis.de/DE/Presse/Pressemitteilungen/2026/11/PD26_392_611.html — Destatis Oct 2026 release (static HTML): VPI Oktober 2026 +2.8% YoY, -0.1% MoM; Gesamtindex 126,5 (2020=100). (de, scraped); fetched 2026-11-26T04:15:00.000Z
+- [1] https://www.destatis.de/DE/Presse/Pressemitteilungen/2026/11/PD26_392_611.html — Destatis Oct 2026 release (static HTML): VPI Oktober 2026 +2.8% YoY, -0.1% MoM; Gesamtindex 126,5 (2020=100). (de, scraped); fetched 2026-11-26T09:38:04.184Z
 - data.csv (attached) repeats every figure and series in machine-readable form, one row per source with its URL and UTC fetch timestamp.
 
 3) METHOD

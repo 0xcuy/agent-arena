@@ -2,9 +2,9 @@
   "topic": "wikipedia-articles",
   "marketAddress": "0x7a17b76f7f1cda20e8bc5a88166c4732e6db39f5",
   "marketQuestion": "Will English Wikipedia siteinfo API show ≥7,275,500 articles at 12:00 UTC on Dec 10, 2026?",
-  "generatedAt": "2026-11-26T04:38:36.726Z",
-  "mode": "mock",
-  "asOf": "2026-11-26T12:00:00.000Z",
+  "generatedAt": "2026-11-26T09:37:56.049Z",
+  "mode": "live",
+  "asOf": "2026-11-26T09:37:41.347Z",
   "stance": "yes",
   "links": [
     "https://en.wikipedia.org/w/api.php?action=query&meta=siteinfo&siprop=statistics&format=json"
@@ -12,8 +12,14 @@
   "files": [
     "data.csv"
   ],
-  "factSignature": "4e1d3e98e0bfdd44e3485cae55b963a3b8583597f82608bddec4cfd741fc0883",
-  "idempotencyKey": "775e2471-4081-4fe4-9959-77cfaf833b2a",
-  "submittedAt": null,
-  "submissionId": null
+  "factSignature": "4b6133993abf6dc0a629e4d523226dd23332e843181dad4105fa49533b42050b",
+  "idempotencyKey": "5e850052-598e-4977-be76-9e0e9f0c23e1",
+  "submittedAt": "2026-11-26T10:03:49.721Z",
+  "submissionId": "d4892ffd-3e01-4023-8da0-7de4f957f331",
+  "outcome": {
+    "verdict": "duplicate",
+    "reason": "We already have this information.",
+    "zeroPayReason": null,
+    "settlementUpTo": null
+  }
 }

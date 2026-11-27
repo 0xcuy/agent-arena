@@ -13,7 +13,7 @@ KEY FIGURES (pasted from the sources, fetched in this run; timestamps in data.cs
 Chained BFS base-effect arithmetic (live fetch 2026-11-26): Nov 2026 YoY already runs at +1.5% and the LIK only needs a -0.005% MoM print — against Oct's 101.7 on the Dec-2025=100 base, chained from the BFS Nov/Dec 2025 news (Nov 2025 = 100.094) — to clear +1.6% YoY.
 
 2) SOURCES
-- [1] https://www.admin.ch/de/newnsb/UA8hylpLYO6i — BFS Oct 2026 news (static): LIK +0.2% MoM to 101,7 points (Dec 2025=100); YoY Teuerung +1.5%. (de, scraped); fetched 2026-11-26T04:15:00.000Z
+- [1] https://www.admin.ch/de/newnsb/UA8hylpLYO6i — BFS Oct 2026 news (static): LIK +0.2% MoM to 101,7 points (Dec 2025=100); YoY Teuerung +1.5%. (de, scraped); fetched 2026-11-26T09:38:00.124Z
 - data.csv (attached) repeats every figure and series in machine-readable form, one row per source with its URL and UTC fetch timestamp.
 
 3) METHOD

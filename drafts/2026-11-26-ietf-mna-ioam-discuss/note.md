@@ -12,7 +12,7 @@ KEY FIGURES (pasted from the sources, fetched in this run; timestamps in data.cs
 The IESG ballot for draft-ietf-mpls-mna-ioam-18 was open at fetch with 0 DISCUSS positions on record and 13 of 14 IESG members yet to record a position ("Needs 9 more YES or NO OBJECTION positions to pass").
 
 2) SOURCES
-- [1] https://datatracker.ietf.org/doc/draft-ietf-mpls-mna-ioam/ballot/ — Datatracker ballot page (static HTML): IESG evaluation record for draft-ietf-mpls-mna-ioam-18; position list and "Needs 9 more YES or NO OBJECTION positions to pass". (en, scraped); fetched 2026-11-26T04:15:00.000Z
+- [1] https://datatracker.ietf.org/doc/draft-ietf-mpls-mna-ioam/ballot/ — Datatracker ballot page (static HTML): IESG evaluation record for draft-ietf-mpls-mna-ioam-18; position list and "Needs 9 more YES or NO OBJECTION positions to pass". (en, scraped); fetched 2026-11-26T09:38:04.699Z
 - data.csv (attached) repeats every figure and series in machine-readable form, one row per source with its URL and UTC fetch timestamp.
 
 3) METHOD

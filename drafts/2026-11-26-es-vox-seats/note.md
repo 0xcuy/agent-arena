@@ -12,7 +12,7 @@ KEY FIGURES (pasted from the sources, fetched in this run; timestamps in data.cs
 Live provincial tracker (Data10 via Electografía, fetched 2026-11-26): Vox polls at 19.1% nationally and its tracker projects 64 Congress of Deputies seats — above the 60-seat bar — using the tracker's own D'Hondt-style provincial seat model.
 
 2) SOURCES
-- [1] https://www.electografica.com/2026/11/encuesta-data10-261123.html — Electografía tracking page (static HTML, ES): Data10 daily seat/vote projection for the 29 Nov 2026 general election; Vox 19.1% / 64 seats; every figure pasted above appears on the page. (es, scraped); fetched 2026-11-26T04:15:00.000Z
+- [1] https://www.electografica.com/2026/11/encuesta-data10-261123.html — Electografía tracking page (static HTML, ES): Data10 daily seat/vote projection for the 29 Nov 2026 general election; Vox 19.1% / 64 seats; every figure pasted above appears on the page. (es, scraped); fetched 2026-11-26T09:38:05.510Z
 - data.csv (attached) repeats every figure and series in machine-readable form, one row per source with its URL and UTC fetch timestamp.
 
 3) METHOD

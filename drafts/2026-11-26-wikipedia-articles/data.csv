@@ -1,13 +1,13 @@
 row_type,metric,value
-live,current count (live snapshot),7269403
+live,current count (live snapshot),7269470
 live,threshold,7275500
-live,required net gain,6097
-scenario,days remaining to evaluation,14.00
-scenario,required net per day,435.5
-live,"observed net per day (2026 year-to-date, live)",469.6
+live,required net gain,6030
+scenario,days remaining to evaluation,14.10
+scenario,required net per day,427.7
+live,"observed net per day (2026 year-to-date, live)",469.8
 scenario,daily net sd (stated assumption),60.0
-scenario,projected net over remaining days,6574
-scenario,projection sd,224
-scenario,P(net >= required),0.983270
-source,https://en.wikipedia.org/w/api.php?action=query&meta=siteinfo&siprop=statistics&format=json,2026-11-26T04:15:00.000Z
-source,https://en.wikipedia.org/wiki/Wikipedia:Size_of_Wikipedia,2026-11-26T04:15:00.000Z
+scenario,projected net over remaining days,6624
+scenario,projection sd,225
+scenario,P(net >= required),0.995821
+source,https://en.wikipedia.org/w/api.php?action=query&meta=siteinfo&siprop=statistics&format=json,2026-11-26T09:37:54.435Z
+source,https://en.wikipedia.org/wiki/Wikipedia:Size_of_Wikipedia,2026-11-26T09:37:55.965Z
