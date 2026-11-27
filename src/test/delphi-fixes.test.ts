@@ -261,22 +261,44 @@ test("fide miner: primary source is the Lichess broadcast PGN (anti-duplicate UR
   assert.match(r.spec.figures.join(" "), /1\/2-1\/2|½-½/);
 });
 
-test("fide miner: falls back to the official FIDE PGN when the broadcast is unavailable", async () => {
+test("fide miner: broadcast failure falls back to the scraped factsheet as explicit LAST RESORT (FIDE PGN fallback was removed — URL 404s live)", async () => {
   const seed = RESEARCH_SEEDS.find((s) => s.topic === "fide-game8")!;
   const ratings = '{"players":[{"shortName":"Sindarov","rating":2780},{"shortName":"Gukesh","rating":2712}]}';
+  const factsheet = [
+    "# FACT SHEET – Game 2",
+    "FACT SHEET – Game 2 | World Chess Championship 2026 | Geneva",
+    "White: D Gukesh  Black: Javokhir Sindarov  Result: 1/2-1/2",
+  ].join("\n");
+  const urlsFetched: string[] = [];
   const api: SourceApi = {
     mock: false,
     fetch: async (url) => {
+      urlsFetched.push(url);
       if (url.includes("lichess.org")) throw new Error("HTTP 404 (round not found)");
       if (url.includes("fide.com/multimedia/pgn")) {
-        return { url, body: SAMPLE_BROADCAST_PGN, fetchedAt: CTX.now.toISOString(), status: 200, mock: false };
+        throw new Error("the removed fidePgn fallback must NEVER be fetched");
+      }
+      if (url.includes("fide.com")) {
+        return { url, body: factsheet, fetchedAt: CTX.now.toISOString(), status: 200, mock: false };
       }
       return { url, body: ratings, fetchedAt: CTX.now.toISOString(), status: 200, mock: false };
     },
   };
   const r = await refreshSeed(seed, api, CTX);
   const p = r.spec.analysis.params as Record<string, unknown>;
-  assert.equal(p.scoreA, 1);
-  assert.equal(p.scoreSource, "official FIDE PGN");
-  assert.ok(r.spec.links.some((l) => l.url.includes("fide.com/multimedia/pgn")), JSON.stringify(r.spec.links));
+  assert.equal(p.scoreSource, "FIDE factsheet");
+  assert.ok(!urlsFetched.some((u) => u.includes("multimedia/pgn")), `removed fidePgn fallback fetched: ${urlsFetched.join(",")}`);
+  assert.ok(r.spec.links.every((l) => !l.url.includes("multimedia/pgn")), JSON.stringify(r.spec.links));
+});
+
+test("fide seed URLs (BLOCKING 1): real Lichess broadcast tournament ID, no guessed slug/latest.pgn, no fidePgn source", () => {
+  const seed = RESEARCH_SEEDS.find((s) => s.topic === "fide-game8")!;
+  // Verified live on 27 Nov: GET /api/broadcast lists tour id qfkdt8mn =
+  // "FIDE World Chess Championship 2026"; /api/broadcast/qfkdt8mn.pgn → 200 PGN.
+  assert.equal(seed.sources.lichessBroadcast!.url, "https://lichess.org/api/broadcast/qfkdt8mn.pgn");
+  assert.match(seed.sources.lichessBroadcast!.url, /\/api\/broadcast\/[0-9A-Za-z]{8}\.pgn$/, "opaque base32 tournament id, .pgn suffix");
+  assert.ok(!seed.sources.lichessBroadcast!.url.includes("latest.pgn"), "the guessed latest.pgn alias 404s");
+  assert.ok(!seed.sources.lichessBroadcast!.url.includes("wcc-2026"), "no slug routes exist on /api/broadcast");
+  assert.equal((seed.sources as Record<string, unknown>).fidePgn, undefined, "guessed FIDE PGN URL 404s live — fallback removed");
+  assert.ok(seed.sources.fideNews, "factsheet stays as the explicit last-resort fallback");
 });

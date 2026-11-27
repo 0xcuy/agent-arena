@@ -135,12 +135,16 @@ export async function refreshFideMatch(seed: SeedInput, api: SourceApi, ctx: Ref
 
   // Delphi fix 3: game results come from the Lichess broadcast PGN (live
   // move-level, available while the game runs and frozen per round), with the
-  // official FIDE PGN / factsheet as the after-the-game fallback. The old
+  // official FIDE factsheet scrape as the ONLY fallback. Round 2: the
+  // previously guessed FIDE PGN download URL (fide.com/multimedia/pgn/
+  // wcc-2026.pgn) was verified live on 27 Nov to return 404 — no real FIDE
+  // PGN endpoint is discoverable — so the "fide-pgn" candidate was dropped;
+  // the factsheet is a last resort and logs a warning when used. The old
   // factsheet-only scrape could not deliver finished-game data on the live
   // run (the scraped page carried no completed-game RESULT block).
   // Candidate sources are tried in order; in mock mode a URL with no recorded
   // fixture is skipped (mock fetch would hard-fail, never invent content).
-  let resultSource: "lichess-broadcast" | "fide-pgn" | "fide-factsheet" = "lichess-broadcast";
+  let resultSource: "lichess-broadcast" | "fide-factsheet" = "lichess-broadcast";
   let games: PgnGameResult[];
   let resultDoc: SourceDoc;
   let broadcastDoc: SourceDoc | undefined;
@@ -151,25 +155,20 @@ export async function refreshFideMatch(seed: SeedInput, api: SourceApi, ctx: Ref
     if (games.length === 0) throw new LiveMiningError("lichess broadcast PGN parsed to zero games");
     resultDoc = broadcastDoc;
   } catch {
-    try {
-      const pgnDoc = await tryFresh(api, seed.sources.fidePgn, ctx);
-      games = parsePgnResults(pgnDoc.body, "Sindarov");
-      if (games.length === 0) throw new LiveMiningError("fide PGN parsed to zero games");
-      resultSource = "fide-pgn";
-      resultDoc = pgnDoc;
-    } catch {
-      const fideDoc = await fresh(api, seed.sources.fideNews, "fideNews", ctx);
-      games = parseFactsheetBlock(fideDoc.body, "Sindarov");
-      if (games.length === 0) {
-        throw new LiveMiningError("no finished-game results from lichess broadcast, fide PGN or factsheet");
-      }
-      // The factsheet carries only the LATEST game's block; the running count
-      // comes from its heading ("FACT SHEET – Game 2").
-      const sheetNo = grp(rx(fideDoc.body, /FACT SHEET\s*[–-]\s*Game\s+(\d+)/, "factsheet game number"), 1, "factsheet game number");
-      factsheetGamesPlayed = Number(sheetNo);
-      resultSource = "fide-factsheet";
-      resultDoc = fideDoc;
+    const fideDoc = await fresh(api, seed.sources.fideNews, "fideNews", ctx);
+    // Explicit last-resort warning: the factsheet scrape already failed once
+    // live (26 Nov) — never present it as a verified primary source.
+    console.warn(`[fide-game8] WARNING: last-resort fallback to scraped FIDE factsheet (${fideDoc.url}) — lichess broadcast PGN unavailable`);
+    games = parseFactsheetBlock(fideDoc.body, "Sindarov");
+    if (games.length === 0) {
+      throw new LiveMiningError("no finished-game results from lichess broadcast or factsheet");
     }
+    // The factsheet carries only the LATEST game's block; the running count
+    // comes from its heading ("FACT SHEET – Game 2").
+    const sheetNo = grp(rx(fideDoc.body, /FACT SHEET\s*[–-]\s*Game\s+(\d+)/, "factsheet game number"), 1, "factsheet game number");
+    factsheetGamesPlayed = Number(sheetNo);
+    resultSource = "fide-factsheet";
+    resultDoc = fideDoc;
   }
 
   // Ratings stay on the World Chess event metadata.
@@ -205,7 +204,7 @@ function finishFideMatch(
   seed: SeedInput,
   ctx: RefreshCtx,
   games: PgnGameResult[],
-  resultSource: "lichess-broadcast" | "fide-pgn" | "fide-factsheet",
+  resultSource: "lichess-broadcast" | "fide-factsheet",
   resultDoc: SourceDoc,
   ratingsDoc: SourceDoc,
   opts: { ratingA: number; ratingB: number; targetGame: number; drawShare: number; factsheetGamesPlayed?: number },
@@ -225,21 +224,32 @@ function finishFideMatch(
   const resultWord = last.result.replace(/1\/2/g, "½").replace(/[–—]/g, "-");
   const resultLabel =
     resultSource === "lichess-broadcast" ? "Lichess broadcast PGN"
-    : resultSource === "fide-pgn" ? "official FIDE PGN"
     : "FIDE factsheet";
   const sourceUrl =
     resultSource === "lichess-broadcast" ? seed.sources.lichessBroadcast?.url ?? resultDoc.url
-    : resultSource === "fide-pgn" ? seed.sources.fidePgn?.url ?? resultDoc.url
     : resultDoc.url;
+
+  // Round-2 QA NIT 1: derive the headline score description and the color
+  // allocation claim from the parsed PGN/factsheet data — never hardcode
+  // "both games drawn" or a games-played color list.
+  const halfGames = games.filter((g) => g.result === "1/2-1/2").length;
+  const scoreDesc =
+    gamesPlayed === 0 ? "no games finished yet"
+    : halfGames === gamesPlayed
+      ? gamesPlayed === 1 ? "the game drawn" : `all ${gamesPlayed} games drawn`
+      : `${gamesPlayed - halfGames} decisive game${gamesPlayed - halfGames === 1 ? "" : "s"} of ${gamesPlayed}`;
+  const whiteGamesA = games.filter((g) => g.white.toLowerCase().includes("sindarov")).length;
+  const colorClaim = gamesPlayed === 0 ? undefined :
+    `Color allocation in the match so far (from the parsed ${resultLabel}): Sindarov had the white pieces in ${whiteGamesA} of ${gamesPlayed} game${gamesPlayed === 1 ? "" : "s"} (Gukesh in ${gamesPlayed - whiteGamesA})`;
 
   const figures = [
     `${resultLabel} (fetched ${ctx.now.toISOString().slice(0, 10)}): game ${gamesPlayed} ended ${resultWord}; match score ${scoreA}-${scoreB} (White: ${last.white}, Black: ${last.black})`,
     `Elo ratings of the two players (worldchess.com event metadata, live pages): Sindarov ${opts.ratingA} (UZB) vs Gukesh ${opts.ratingB} (IND) — a ${opts.ratingA - opts.ratingB} Elo gap`,
-    `Color allocation in the match so far: Sindarov held White in games 1 and 3 (stated in the factsheet's game-3 preview: "white pieces for the second time in the match tomorrow")`,
+    ...(colorClaim ? [colorClaim] : []),
     `Model: exact enumeration of the ${gamesRemaining} remaining games (to the market's after-game-${opts.targetGame} evaluation) with per-game W/D/L derived from the live Elo gap and a stated ${(opts.drawShare * 100).toFixed(0)}% draw-share assumption, color-averaged`,
   ];
   const headline =
-    `After game ${gamesPlayed} of the FIDE World Chess Championship 2026 the official match score is ${scoreA}-${scoreB} (both games drawn), and the challenger Sindarov — rated ${opts.ratingA} vs Gukesh's ${opts.ratingB} — ` +
+    `After game ${gamesPlayed} of the FIDE World Chess Championship 2026 the official match score is ${scoreA}-${scoreB} (${scoreDesc}), and the challenger Sindarov — rated ${opts.ratingA} vs Gukesh's ${opts.ratingB} — ` +
     `faces a ${gamesRemaining}-game stretch before the market's after-game-${opts.targetGame} evaluation point; an exact enumeration of Elo-implied outcomes puts him strictly ahead with the probability computed in the attached CSV.`;
 
   const links: SourceLink[] = [
@@ -247,9 +257,7 @@ function finishFideMatch(
       url: sourceUrl,
       label: resultSource === "fide-factsheet"
         ? "FIDE official documents page: WCC 2026 game factsheets (result, colors, match score)"
-        : resultSource === "fide-pgn"
-          ? "FIDE official PGN download: WCC 2026 games (RESULT tags)"
-          : "Lichess broadcast: WCC 2026 games (per-round PGN, RESULT tags)",
+        : "Lichess broadcast: WCC 2026 games (per-round PGN, RESULT tags)",
       lang: "en",
       access: resultSource === "fide-factsheet" ? "scraped" : "api-json",
       expect: resultSource === "fide-factsheet" ? ["½"] : [`[Result "${last.result}"]`],
@@ -400,7 +408,17 @@ export async function releasesGapCdf(
     filterTags?: (rows: { tag: string; published: string }[]) => { tag: string; published: string }[];
   },
 ): Promise<Refreshed> {
-  const [relDoc] = await Promise.all([fetchGithubApi(seed.sources[opts.sourceKey]!.url, api)]);
+  // Round-2 QA NIT 2: nodejs.org/dist/index.json is NOT a GitHub API URL —
+  // sending it through fetchGithubApi would attach GitHub's JSON media-type
+  // Accept header to nodejs.org. Non-GitHub URLs go through the plain
+  // freshness-gated transport (fresh) with no GitHub headers.
+  const sourceUrl = seed.sources[opts.sourceKey]!.url;
+  const isGithubApi = new URL(sourceUrl).hostname === "api.github.com";
+  const [relDoc] = await Promise.all([
+    isGithubApi
+      ? fetchGithubApi(sourceUrl, api)
+      : fresh(api, seed.sources[opts.sourceKey], opts.sourceKey, ctx),
+  ]);
   githubOk(relDoc, ctx.live, ctx.now);
   const raw = relDoc.json as unknown;
   if (!Array.isArray(raw)) throw new LiveMiningError(`${opts.kindLabel} endpoint did not return a JSON array`);

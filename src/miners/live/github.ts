@@ -5,10 +5,13 @@ import { LiveMiningError } from "./refreshers-part1.js";
 /**
  * Direct api.github.com fetch layer (Delphi fix 1).
  *
- * The bun/go release miners used to route api.github.com through Firecrawl,
- * which answered HTTP 415 (Unsupported Media Type) and killed both miners on
- * the 26 Nov live run. GitHub's REST API is called DIRECTLY here with the
- * documented request shape:
+ * History note (round-2 QA NIT 7, corrected): on 26 Nov the api.github.com
+ * calls were NOT routed through Firecrawl — they were plain native fetches
+ * sent with `Accept: text/html` (the Firecrawl scraping Accept header left
+ * over from the previous transport), which GitHub's REST API answered with
+ * HTTP 415 (Unsupported Media Type) and killed both release miners. Nothing
+ * went through Firecrawl: src/firecrawl/client.ts is imported nowhere. The
+ * calls go DIRECTLY out with the documented request shape:
  *   - `Accept: application/vnd.github+json` (versioned JSON media type)
  *   - `X-GitHub-Api-Version: 2022-11-28`
  *   - NO Content-Type header on GET (a Content-Type on a bodiless GET is

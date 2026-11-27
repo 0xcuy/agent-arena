@@ -1,6 +1,6 @@
 import type { ResearchSpec, SourceLink } from "../../types.js";
 import type { SourceApi, SourceDoc } from "./sources.js";
-import { assertFresh } from "./sources.js";
+import { assertFresh, hasMockFixture } from "./sources.js";
 import { cleanMarkdown, parseEuropeanNumber } from "./markdown.js";
 
 /**
@@ -301,28 +301,99 @@ export async function refreshChCpi(seed: SeedInput, api: SourceApi, ctx: Refresh
   );
 }
 
+/**
+ * Turnout-figure extraction from a cantonal early-returns page. Round-2 QA
+ * NIT 5: the old `derzeit...{0,80}...(number)(%|Prozent)` pattern matched ANY
+ * percentage within 80 chars of "derzeit" (on a chancery news page that can be
+ * a date quota or an unrelated share). The tightened pattern requires (a) the
+ * unit `%`/`Prozent` IMMEDIATELY adjacent to the number and (b) turnout
+ * wording (Stimmbeteiligung / Stimmabgabe / briefflich / Wahlbriefe /
+ * participation / votations, ...) in the surrounding sentence window.
+ */
+export function parseDerzeitTurnoutPct(body: string): string | undefined {
+  for (const m of body.matchAll(/derzeit/gi)) {
+    const start = Math.max(0, m.index! - 140);
+    const window = body.slice(start, m.index! + 160);
+    if (
+      !/(stimmbeteiligung|stimmabgabe|briefflich|brieflich|wahlbeteiligung|wahlbrief|einlauf|beteiligung|participation|votation|vote|scrutin)/i.test(
+        window,
+      )
+    ) {
+      continue;
+    }
+    const num = window.match(/(\d+(?:[.,]\d+)?)\s*(?:%|Prozent)/i);
+    if (num) return num[1]!;
+  }
+  return undefined;
+}
+
+/** French cantonal wording: "participation ... actuellement (de) X %" — unit adjacent, turnout wording required. */
+export function parseFrenchTurnoutPct(body: string): string | undefined {
+  const m = body.match(
+    /participation[^.\n]{0,120}?(?:est\s+|de\s+|actuellement\s+(?:de\s+)?)?(\d+(?:[.,]\d+)?)\s*(?:%|prozent)/i,
+  );
+  return m?.[1];
+}
+
+/** Trailing wording: "X % briefliche Stimmabgabe" — turnout wording required within 80 chars after the unit. */
+export function parseTrailingTurnoutPct(body: string): string | undefined {
+  const m = body.match(/(\d+(?:[.,]\d+)?)\s*%[^.\n]{0,80}?(?:briefflich|brieflich|Stimmabgabe|Stimmbeteiligung)/i);
+  return m?.[1];
+}
+
+const TURNOUT_CANTON_ORDER = ["earlyReturnsGE", "earlyReturnsBS", "earlyReturnsBE", "earlyReturnsVD", "earlyReturnsZH", "earlyReturns"] as const;
+
 /** Path 3: Swiss federal vote turnout — cantonal postal returns + SRG survey. */
 export async function refreshChTurnout(seed: SeedInput, api: SourceApi, ctx: RefreshCtx): Promise<Refreshed> {
-  const [earlyDoc, surveyDoc] = await Promise.all([
-    fresh(api, seed.sources.earlyReturns, "earlyReturns", ctx),
-    fresh(api, seed.sources.gfsbern, "gfsbern", ctx),
-  ]);
+  const surveyDoc = await fresh(api, seed.sources.gfsbern, "gfsbern", ctx);
+  // Round-2 QA NIT 4: fetch-time cascade across cantonal chancery pages.
+  // Try each candidate in the anti-duplicate preference order (Geneva,
+  // Basel-Stadt, Bern, Vaud, Zurich, recorded-legacy last); move to the next
+  // canton when the fetch fails, the URL has no mock fixture (mock mode), or
+  // the page does not yield a turnout figure under the tightened parser.
+  const seen = new Set<string>();
+  const candidates: { key: string; link: SourceLink }[] = [];
+  for (const key of TURNOUT_CANTON_ORDER) {
+    const link = seed.sources[key] as SourceLink | undefined;
+    if (!link || seen.has(link.url)) continue;
+    seen.add(link.url);
+    candidates.push({ key, link });
+  }
+  let earlyDoc: SourceDoc | undefined;
+  let earlyRaw: string | undefined;
+  const failures: string[] = [];
+  for (const { key, link } of candidates) {
+    try {
+      if (api.mock && !hasMockFixture(link.url)) {
+        failures.push(`${key}: no mock fixture for ${link.url}`);
+        continue;
+      }
+      const doc = await fresh(api, link, key, ctx);
+      const raw = parseDerzeitTurnoutPct(cleanMarkdown(doc.body)) ?? parseFrenchTurnoutPct(cleanMarkdown(doc.body)) ?? parseTrailingTurnoutPct(cleanMarkdown(doc.body));
+      if (raw === undefined) {
+        failures.push(`${key}: no turnout percentage parsed from ${link.url}`);
+        continue;
+      }
+      earlyDoc = doc;
+      earlyRaw = raw;
+      break;
+    } catch (err) {
+      failures.push(`${key}: ${(err as Error).message}`);
+    }
+  }
+  if (!earlyDoc || earlyRaw === undefined) {
+    throw new LiveMiningError(`no cantonal early-returns source yielded a turnout figure; tried: ${failures.join("; ")}`);
+  }
   const earlySourceLabel =
-    (seed.sources.earlyReturns as { label?: string } | undefined)?.label ?? "Cantonal chancery";
-  const earlyDocLang = (seed.sources.earlyReturns as { lang?: string } | undefined)?.lang ?? "de";
+    (earlyDoc.url === seed.sources.earlyReturns?.url
+      ? (seed.sources.earlyReturns as { label?: string } | undefined)?.label
+      : (candidates.find((c) => c.link.url === earlyDoc!.url)?.link as { label?: string } | undefined)?.label) ?? "Cantonal chancery";
+  const earlyDocLang = (candidates.find((c) => c.link.url === earlyDoc!.url)?.link as { lang?: string } | undefined)?.lang ?? "de";
   // Firecrawl markdown is noisy (link brackets, nbsp, decimal commas): clean
   // before extracting, then match flexible label/number patterns. The 26 Nov
   // live run died here on `beträgt derzeit (\d+,\d) Prozent` — the live page
   // phrased the figure differently.
   const body = cleanMarkdown(earlyDoc.body);
-  // German (beträgt derzeit X Prozent / X % briefliche Stimmabgabe) and
-  // French (participation ... actuellement de X %) page wordings.
-  const earlyRawM = body.match(
-    /(?:beträgt\s+)?derzeit[^.\n]{0,80}?([\d]+(?:[.,]\d+)?)\s*(?:%|Prozent)/i,
-  ) ?? body.match(
-    /participation[^.\n]{0,80}?(?:est\s+|de\s+|actuellement\s+(?:de\s+)?)?([\d]+(?:[.,]\d+)?)\s*(?:%|Prozent)/i,
-  ) ?? body.match(/([\d]+(?:[.,]\d+)?)\s*(?:%|Prozent)[^.\n]{0,80}?(?:briefflich|brieflich|Stimmabgabe|Stimmbeteiligung)/i);
-  const earlyRaw = earlyRawM ? earlyRawM[1]! : grp(rx(earlyDoc.body, /beträgt derzeit (\d+,\d) Prozent/, "early postal return"), 1, "early postal return");
   const early = parseEuropeanNumber(earlyRaw) ?? requireNum(earlyRaw, "early postal return");
   const intentionRaw = grp(
     rx(surveyDoc.body, /Teilnahmeabsicht\s+(?:liegt\s+)?(?:unverändert\s+)?bei\s+(\d+(?:[.,]\d+)?)\s*(?:%|Prozent)/i, "participation intention"),
@@ -402,12 +473,22 @@ export async function refreshChWarMateriel(seed: SeedInput, api: SourceApi, ctx:
   // thousands-separator variants. The old `(\d+) Prozent` pairs missed the
   // live page ("würden rund 38,5 Prozent ... 48,2 Prozent ... ablehnen zu").
   const full = cleanMarkdown(surveyDoc.body);
+  // Round 2 (QA BLOCKING 2): when neither anchor is found the old code used
+  // the whole page and matched the first two percentage figures anywhere —
+  // on the gfsbern page that is the AHV/participation pair, i.e. another
+  // proposal's numbers. In a zero-hallucination pipeline a confident wrong
+  // submission is worse than a hard failure: THROW instead of guessing.
   const kmIdx = full.indexOf("Kriegsmaterialgesetz\n");
   const kmAnchor = kmIdx >= 0 ? kmIdx : full.indexOf("enges Rennen mit leichtem Ja-Vorteil");
-  const kmSegment = kmAnchor >= 0 ? full.slice(kmAnchor, kmAnchor + 4000) : full;
+  if (kmAnchor < 0) {
+    throw new LiveMiningError(
+      "KM poll section not found on the gfs.bern page (no 'Kriegsmaterialgesetz' heading and no 'enges Rennen' phrase) — refusing to guess shares from an unanchored page",
+    );
+  }
+  const kmSegment = full.slice(kmAnchor, kmAnchor + 4000);
   const sharePhrase =
     /(?:w(?:ü|ue)rden\s+(?:rund\s+|etwa\s+|gar\s+)?|wohl\s+)?([\d][\d.'\u2019\u00a0\u202f]{0,7}(?:[.,]\d+)?)\s*(?:%|Prozent)[^\n]{0,160}?([\d][\d.'\u2019\u00a0\u202f]{0,7}(?:[.,]\d+)?)\s*(?:%|Prozent)/i;
-  const jaM = kmSegment.match(sharePhrase) ?? full.match(sharePhrase);
+  const jaM = kmSegment.match(sharePhrase);
   let ja: number;
   let nein: number;
   if (jaM) {

@@ -231,22 +231,22 @@ export const RESEARCH_SEEDS: ResearchSeed[] = [
     market: { targetGame: 8 },
     assumptions: { drawShare: 0.75 },
     sources: {
-      // Delphi fix 3: primary = Lichess broadcast round PGN (live game
-      // results), fallback = the official FIDE PGN download; the scraped
-      // factsheet page is only the last resort. Anti-duplicate: the Lichess
+      // Delphi fix 3 (round 2, verified 27 Nov): primary = the REAL Lichess
+      // broadcast PGN. Tournament ID `qfkdt8mn` = "FIDE World Chess
+      // Championship 2026" discovered via GET /api/broadcast (opaque base32
+      // IDs, no slug alias exists); `GET /api/broadcast/qfkdt8mn.pgn` returns
+      // 200 with the match PGN (all rounds). The previously guessed
+      // `/broadcast/wcc-2026/latest.pgn` 404s (no slug routes) and the guessed
+      // FIDE PGN download `fide.com/multimedia/pgn/wcc-2026.pgn` also 404s
+      // (verified live) — both removed; the scraped factsheet page is the only
+      // fallback, and it logs a warning when used. Anti-duplicate: the Lichess
       // round URL is a same-day fresh catalyst, not the headline fide.com
       // documents page dozens of miners cite.
       lichessBroadcast: {
-        url: "https://lichess.org/api/broadcast/wcc-2026/latest.pgn",
-        label: "Lichess broadcast PGN (WCC 2026, latest round)",
+        url: "https://lichess.org/api/broadcast/qfkdt8mn.pgn",
+        label: "Lichess broadcast PGN (WCC 2026, tournament qfkdt8mn — all rounds)",
         lang: "en",
         access: "api-json",
-      },
-      fidePgn: {
-        url: "https://www.fide.com/multimedia/pgn/wcc-2026.pgn",
-        label: "FIDE official PGN download (WCC 2026 games)",
-        lang: "en",
-        access: "scraped",
       },
       fideNews: {
         url: "https://www.fide.com/new-documents/",

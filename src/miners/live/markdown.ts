@@ -146,18 +146,49 @@ export function pgnResultToScores(result: string): [number, number] | undefined 
  * Parse every game's RESULT tag out of a multi-game PGN (Lichess broadcast
  * round export or the official FIDE PGN, same format). Player A = the side
  * named first in `playerA` (Sindarov): White/Black colour is read per game.
+ *
+ * Round-2 QA NIT 8: the PGN is first split into individual games (each game
+ * ends at its movetext; tags never span a blank-line game boundary), and each
+ * game is parsed separately. The previous single global regex could bind a
+ * game that lacks a `[Result]` tag to the NEXT game's Result tag.
  */
 export function parsePgnResults(pgn: string, playerA: string): PgnGameResult[] {
   const games: PgnGameResult[] = [];
-  const re = /\[White\s+"([^"]+)"\]\s*\n\[Black\s+"([^"]+)"\][\s\S]*?\[Result\s+"([^"]+)"\]/g;
-  for (const m of pgn.matchAll(re)) {
-    const white = m[1]!.trim();
-    const black = m[2]!.trim();
-    const scores = pgnResultToScores(m[3]!);
+  // Split into individual games. A game starts at an [Event] tag (broadcast
+  // exports always repeat it) or at a [White] tag once the current game has
+  // already seen its [Result] tag — that keeps even non-standard exports
+  // without [Event] per game separated.
+  const chunks: string[] = [];
+  let current: string[] = [];
+  let seenResult = false;
+  for (const line of pgn.split("\n")) {
+    const startsGame =
+      /^\[Event\s/.test(line) ||
+      (/^\[White\s/.test(line) && seenResult);
+    if (startsGame && current.length > 0) {
+      chunks.push(current.join("\n"));
+      current = [];
+      seenResult = false;
+    }
+    if (/^\[Result\s/.test(line)) seenResult = true;
+    current.push(line);
+  }
+  if (current.length > 0) chunks.push(current.join("\n"));
+  for (const chunk of chunks) {
+    // Each game's tags are the consecutive [Tag "value"] lines at its start;
+    // parse only within this chunk, so a missing Result cannot leak from the
+    // next game.
+    const whiteM = chunk.match(/\[White\s+"([^"]+)"\]/);
+    const blackM = chunk.match(/\[Black\s+"([^"]+)"\]/);
+    const resultM = chunk.match(/\[Result\s+"([^"]+)"\]/);
+    if (!whiteM || !blackM || !resultM) continue;
+    const white = whiteM[1]!.trim();
+    const black = blackM[1]!.trim();
+    const scores = pgnResultToScores(resultM[1]!);
     if (!scores) continue;
     const [w, b] = scores;
     const aIsWhite = white.toLowerCase().includes(playerA.toLowerCase());
-    games.push({ white, black, result: m[3]!.trim(), scoreA: aIsWhite ? w : b, scoreB: aIsWhite ? b : w });
+    games.push({ white, black, result: resultM[1]!.trim(), scoreA: aIsWhite ? w : b, scoreB: aIsWhite ? b : w });
   }
   return games;
 }
