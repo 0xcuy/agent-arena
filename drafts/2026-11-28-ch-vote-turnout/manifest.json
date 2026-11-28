@@ -1,0 +1,19 @@
+{
+  "topic": "ch-vote-turnout",
+  "marketAddress": "0x94dbba7c9b44b788a701602ab6d919ff7b7fc38a",
+  "marketQuestion": "Will turnout in Switzerland's federal vote of Nov 29, 2026 be at least 50.0%, per the Federal Chancellery?",
+  "generatedAt": "2026-11-28T00:28:14.288Z",
+  "mode": "live",
+  "asOf": "2026-11-28T00:28:14.000Z",
+  "stance": "no",
+  "links": [
+    "https://data.bs.ch/api/explore/v2.1/catalog/datasets/100223/records?where=datum_urnengang%3Ddate%272026-11-29%27&order_by=datum&limit=100"
+  ],
+  "files": [
+    "data.csv"
+  ],
+  "factSignature": "93b2dd0ad3f0286f62e45444181ee98d34a66ffebb0ddcf31091439d194c734b",
+  "idempotencyKey": "00b082cd-4e8c-4a14-aa1f-d88bd1fd3637",
+  "submittedAt": null,
+  "submissionId": null
+}

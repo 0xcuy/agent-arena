@@ -1,0 +1,25 @@
+row_type,series_or_source,date_or_label,value_pct,eingang_pro_tag,eingang_kumuliert,t_minus,detail
+postal,basel-stadt,2026-11-09,0.40,367,367,T-20,data.bs.ch dataset 100223 re-fetched live this run
+postal,basel-stadt,2026-11-10,2.20,1636,2003,T-19,data.bs.ch dataset 100223 re-fetched live this run
+postal,basel-stadt,2026-11-11,5.92,3382,5385,T-18,data.bs.ch dataset 100223 re-fetched live this run
+postal,basel-stadt,2026-11-12,12.20,5714,11099,T-17,data.bs.ch dataset 100223 re-fetched live this run
+postal,basel-stadt,2026-11-13,14.84,2396,13495,T-16,data.bs.ch dataset 100223 re-fetched live this run
+postal,basel-stadt,2026-11-16,16.64,1639,15134,T-13,data.bs.ch dataset 100223 re-fetched live this run
+postal,basel-stadt,2026-11-17,19.03,2172,17306,T-12,data.bs.ch dataset 100223 re-fetched live this run
+postal,basel-stadt,2026-11-18,21.47,2222,19528,T-11,data.bs.ch dataset 100223 re-fetched live this run
+postal,basel-stadt,2026-11-19,25.52,3690,23218,T-10,data.bs.ch dataset 100223 re-fetched live this run
+postal,basel-stadt,2026-11-20,27.49,1785,25003,T-9,data.bs.ch dataset 100223 re-fetched live this run
+postal,basel-stadt,2026-11-23,29.52,1853,26856,T-6,data.bs.ch dataset 100223 re-fetched live this run
+postal,basel-stadt,2026-11-24,31.47,1767,28623,T-5,data.bs.ch dataset 100223 re-fetched live this run
+postal,basel-stadt,2026-11-25,33.91,2219,30842,T-4,data.bs.ch dataset 100223 re-fetched live this run
+postal,basel-stadt,2026-11-26,39.27,4882,35724,T-3,data.bs.ch dataset 100223 re-fetched live this run
+postal,basel-stadt,2026-11-27,44.13,4418,40142,T-2,data.bs.ch dataset 100223 re-fetched live this run
+postal,zurich,2026-11-27,42.3,,,,stated as verified in research dossier
+postal,geneva,J-3,33.0,,,,stated as verified in research dossier
+postal,winterthur,T-3,35.1,,,,stated as verified in research dossier
+postal,luzern,T-4,31.77,,,,stated as verified in research dossier
+intention,gfs.bern-SRG-wave2,field 4-11 Nov 2026,52.0,,,,n=13527; stated as verified in research dossier
+benchmark,sep-2026-final-national,2026-09,47.1,,,,final national turnout below 50%
+scenario,intention-minus-overshoot,,48.0,,,,point estimate; sd 2.0pp stated; P(>=50)=0.159
+market_snapshot,0x94dbba7c9b44b788a701602ab6d919ff7b7fc38a,2026-11-28T00:22:48Z,51.6,,,,implied P(yes) pct
+source,https://data.bs.ch/api/explore/v2.1/catalog/datasets/100223/records?where=datum_urnengang%3Ddate%272026-11-29%27&order_by=datum&limit=100,2026-11-28T00:22:04Z,,,,,HTTP 200 re-verified in this run

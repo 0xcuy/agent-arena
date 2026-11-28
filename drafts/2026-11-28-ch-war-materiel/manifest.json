@@ -1,0 +1,19 @@
+{
+  "topic": "ch-war-materiel",
+  "marketAddress": "0x191257a08df3a827a9a02fa54926ed9507b4497a",
+  "marketQuestion": "Will Swiss voters approve the 19 Dec 2025 amendment to the War Materiel Act in the federal vote of Nov 29, 2026?",
+  "generatedAt": "2026-11-28T00:12:50.807Z",
+  "mode": "live",
+  "asOf": "2026-11-28T00:12:50.000Z",
+  "stance": "no",
+  "links": [
+    "https://www.gfsbern.ch/de/news/2-srg-trendumfrage-zur-eidg-abstimmung-vom-29-november-2026/"
+  ],
+  "files": [
+    "data.csv"
+  ],
+  "factSignature": "bd4e291b1ee9fe26f075743ffb95aa8301ff4546f90573dd95e960b213079389",
+  "idempotencyKey": "ca1d767a-8bd8-40c2-8b75-f6961594546f",
+  "submittedAt": null,
+  "submissionId": null
+}

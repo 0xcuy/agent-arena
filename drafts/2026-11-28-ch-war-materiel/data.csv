@@ -1,0 +1,11 @@
+row_type,poll_or_source,region_or_field,n,yes_pct,no_pct,undecided_pct,detail
+poll,YouGov,,,42,37,21,undecided-allocation scenario 47.5% Ja (95% CI 45.3-49.8%)
+crosstab,YouGov,unaffiliated-voters,,,,,53% Nein (+11pp)
+poll,LeeWas-wave2-corrected,DE-CH,,49,48,,no yes majority
+poll,LeeWas-wave2-corrected,FR-CH,,48,49,,nein ahead
+poll,LeeWas-wave2-corrected,TI,,48,48,,tie
+poll,gfs.bern-SRG-wave2,field 4-11 Nov 2026,13527,49,46,,yes flat; no +5pp since wave 1
+poll,Tamedia,,12169,49,48,,statistical tie
+scenario,YouGov-undecided-allocation,,,47.5,,,95% CI 45.3-49.8 entirely below 50%
+market_snapshot,0x191257a08df3a827a9a02fa54926ed9507b4497a,,,54.9,,,implied P(yes) pct at 2026-11-28T00:10Z
+source,https://www.gfsbern.ch/de/news/2-srg-trendumfrage-zur-eidg-abstimmung-vom-29-november-2026/,2026-11-28T00:08:03Z,,,,,HTTP 200 re-verified in this run
